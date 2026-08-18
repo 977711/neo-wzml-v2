@@ -1,0 +1,2092 @@
+<!-- This file is a part of NEO-WZML (github.com/irisXDR/NEO-WZML) -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NEO-WZML File Selection</title>
+    <link rel="icon" type="image/png" href="https://iili.io/FLRJNMG.th.png" />
+    <link
+      rel="shortcut icon"
+      type="image/png"
+      href="https://iili.io/FLRJNMG.th.png"
+    />
+    <link rel="apple-touch-icon" href="https://iili.io/FLRJNMG.th.png" />
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.min.js"
+      integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+      crossorigin="anonymous"
+    ></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      :root {
+        --bg-primary: #0a0e17;
+        --bg-secondary: #111827;
+        --bg-card: rgba(17, 24, 39, 0.8);
+        --bg-hover: rgba(55, 65, 81, 0.5);
+        --accent-primary: #6366f1;
+        --accent-secondary: #8b5cf6;
+        --accent-gradient: linear-gradient(
+          135deg,
+          #6366f1 0%,
+          #8b5cf6 50%,
+          #a855f7 100%
+        );
+        --text-primary: #f9fafb;
+        --text-secondary: #9ca3af;
+        --text-muted: #6b7280;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+        --brand-header-height: 72px;
+        --sticks-height: 64px;
+        --submit-footer-height: 90px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      body {
+        background: var(--bg-primary);
+        background-image:
+          radial-gradient(
+            ellipse at top,
+            rgba(99, 102, 241, 0.1) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at bottom right,
+            rgba(139, 92, 246, 0.05) 0%,
+            transparent 50%
+          );
+        min-height: 100vh;
+        color: var(--text-primary);
+        line-height: 1.6;
+      }
+
+      header {
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .header-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .brand img {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        border: 2px solid var(--accent-primary);
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+      }
+
+      .brand-text {
+        font-size: 1.25rem;
+        font-weight: 600;
+        background: var(--accent-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .social-links {
+        display: flex;
+        gap: 0.75rem;
+      }
+
+      .social-links a {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        background: var(--bg-hover);
+        color: var(--text-secondary);
+        transition: all 0.3s ease;
+        text-decoration: none;
+      }
+
+      .social-links a:hover {
+        background: var(--accent-primary);
+        color: white;
+        transform: translateY(-2px);
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 8rem;
+      }
+
+      .card {
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        box-shadow: var(--shadow-glow);
+        overflow: hidden;
+      }
+
+      #pinEntry {
+        max-width: 420px;
+        margin: 4rem auto;
+        padding: 2.5rem;
+        text-align: center;
+        animation: fadeInUp 0.6s ease;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .pin-icon {
+        width: 70px;
+        height: 70px;
+        background: var(--accent-gradient);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 1.75rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
+      }
+
+      #pinEntry h2 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+
+      #pinEntry p {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .input-group {
+        position: relative;
+        margin-bottom: 1rem;
+      }
+
+      .input-group i {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+      }
+
+      #pinInput {
+        width: 100%;
+        padding: 1rem 1rem 1rem 2.75rem;
+        background: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 1rem;
+        letter-spacing: 0.5em;
+        text-align: center;
+        transition: all 0.3s ease;
+      }
+
+      #pinInput:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+      }
+
+      #pinInput::placeholder {
+        letter-spacing: normal;
+        color: var(--text-muted);
+      }
+
+      #submitPin {
+        width: 100%;
+        padding: 1rem;
+        background: var(--accent-gradient);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      #submitPin:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+      }
+
+      #submitPin:active {
+        transform: translateY(0);
+      }
+
+      .error-message {
+        color: var(--danger);
+        font-size: 0.875rem;
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: rgba(239, 68, 68, 0.1);
+        border-radius: 8px;
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+        animation: shake 0.5s ease;
+      }
+
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+
+        25% {
+          transform: translateX(-5px);
+        }
+
+        75% {
+          transform: translateX(5px);
+        }
+      }
+
+      .loading {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-top: 1rem;
+        display: none;
+      }
+
+      .loading.show {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid var(--border-color);
+        border-top-color: var(--accent-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      #sticks {
+        display: none;
+        position: fixed;
+        top: var(--brand-header-height);
+        left: 0;
+        right: 0;
+        z-index: 95;
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.75rem 1.5rem;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+        animation: fadeInUp 0.4s ease;
+        overflow: hidden;
+      }
+
+      #sticks.show {
+        display: block;
+      }
+
+      .sticks-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .sticks-stats {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        min-width: 0;
+      }
+
+      .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.85rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        line-height: 1.2;
+      }
+
+      .stat-pill i {
+        color: var(--accent-primary);
+        font-size: 0.85rem;
+      }
+
+      .stat-pill-text {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 0.25rem;
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+
+      .stat-pill-sep {
+        color: var(--text-muted);
+        font-weight: 400;
+      }
+
+      .stat-pill-label {
+        color: var(--text-muted);
+        font-weight: 400;
+        font-size: 0.78rem;
+        margin-left: 0.15rem;
+      }
+
+      .stat-pill .highlight {
+        color: var(--accent-primary);
+        font-weight: 600;
+      }
+
+      .bulk-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
+
+      .range-actions {
+        justify-content: flex-start;
+        margin-top: 0.25rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border-color);
+        width: 100%;
+      }
+
+      .range-input {
+        width: 72px;
+        padding: 0.45rem 0.5rem;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary, #1a1a1e);
+        color: inherit;
+        font-size: 0.8rem;
+        outline: none;
+        font-family: inherit;
+      }
+
+      .range-input:focus { border-color: var(--accent, #6366f1); }
+      .range-input::placeholder { color: var(--text-muted, #6b7280); }
+
+      .range-sep {
+        font-size: 0.82rem;
+        color: var(--text-muted, #6b7280);
+      }
+
+      .range-hint {
+        font-size: 0.72rem;
+        color: var(--text-muted, #6b7280);
+      }
+
+      .file-pos-badge {
+        font-size: 0.67rem;
+        color: var(--text-muted, #9ca3af);
+        min-width: 22px;
+        text-align: right;
+        margin-right: 4px;
+        flex-shrink: 0;
+        font-family: monospace;
+        opacity: 0.6;
+      }
+
+      .bulk-btn {
+        padding: 0.5rem 0.95rem;
+        border-radius: 10px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        line-height: 1.2;
+      }
+
+      .bulk-btn:hover {
+        border-color: var(--accent-primary);
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+
+      .bulk-btn-secondary:hover {
+        border-color: var(--text-muted);
+      }
+
+      #fileSection {
+        display: none;
+        animation: fadeInUp 0.5s ease;
+      }
+
+      #fileSection.show {
+        display: block;
+        margin-top: var(--sticks-height);
+      }
+
+      .file-card {
+        padding: 1.5rem;
+      }
+
+      #treeview {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      #treeview ul {
+        list-style: none;
+        margin: 0;
+        padding: 0 0 0 1.5rem;
+        border-left: 1px dashed var(--border-color);
+        margin-left: 0.5rem;
+      }
+
+      #treeview li {
+        padding: 0.5rem 0;
+        position: relative;
+      }
+
+      .file-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+
+      .file-item:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent-primary);
+        transform: translateX(4px);
+      }
+
+      .file-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent-primary);
+        cursor: pointer;
+        position: relative;
+      }
+
+      .file-item input[type="checkbox"]:indeterminate {
+        -webkit-appearance: none;
+        appearance: none;
+        background: var(--bg-secondary);
+        border: 2px solid var(--accent-primary);
+        border-radius: 4px;
+        position: relative;
+      }
+
+      .file-item input[type="checkbox"]:indeterminate::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 10px;
+        height: 3px;
+        background: var(--accent-primary);
+        border-radius: 2px;
+      }
+
+      .file-icon {
+        width: 32px;
+        height: 32px;
+        background: var(--bg-hover);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent-secondary);
+        font-size: 0.9rem;
+      }
+
+      .file-icon.folder {
+        color: var(--warning);
+      }
+
+      .file-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .file-name {
+        font-weight: 500;
+        color: var(--text-primary);
+        word-break: break-word;
+        font-size: 0.9rem;
+      }
+
+      .file-meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+      }
+
+      .folder-toggle {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-hover);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .folder-toggle:hover {
+        background: var(--accent-primary);
+        color: white;
+      }
+
+      .folder-toggle.open {
+        transform: rotate(90deg);
+      }
+
+      .parent > ul {
+        display: none;
+      }
+
+      .parent.open > ul {
+        display: block;
+      }
+
+      .submit-wrapper {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        display: flex;
+        justify-content: center;
+        z-index: 100;
+        box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.3);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition:
+          opacity 0.3s ease,
+          visibility 0.3s ease,
+          transform 0.3s ease;
+      }
+
+      .submit-wrapper.show {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .scroll-controls {
+        position: fixed;
+        right: 1.25rem;
+        bottom: calc(var(--submit-footer-height) + 1rem);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        z-index: 101;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(8px);
+        transition:
+          opacity 0.3s ease,
+          visibility 0.3s ease,
+          transform 0.3s ease;
+      }
+
+      .scroll-controls.show {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .scroll-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px);
+        backdrop-filter: blur(20px);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      }
+
+      .scroll-btn:hover {
+        background: var(--accent-primary);
+        color: white;
+        border-color: var(--accent-primary);
+        transform: translateY(-2px);
+      }
+
+      .scroll-btn:active {
+        transform: translateY(0);
+      }
+
+      .submit-btn {
+        padding: 1rem 3rem;
+        background: var(--accent-gradient);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+      }
+
+      .submit-btn:active {
+        transform: translateY(0);
+      }
+
+      .empty-state {
+        color: var(--text-muted);
+        text-align: center;
+        padding: 2rem;
+      }
+
+      .submit-btn:disabled,
+      .submit-btn[aria-busy="true"] {
+        cursor: not-allowed;
+        opacity: 0.7;
+        transform: none;
+        box-shadow: none;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 14, 23, 0.78);
+        -webkit-backdrop-filter: blur(12px);
+        backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+          visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        padding: 1rem;
+      }
+
+      .modal.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .submit-modal-content {
+        background: var(--bg-card);
+        -webkit-backdrop-filter: blur(24px);
+        backdrop-filter: blur(24px);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        padding: 3rem 2rem;
+        width: 100%;
+        max-width: 440px;
+        text-align: center;
+        box-shadow:
+          0 24px 64px rgba(0, 0, 0, 0.5),
+          var(--shadow-glow);
+        transform: scale(0.92) translateY(20px);
+        transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .submit-modal-content::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--accent-gradient);
+        opacity: 0.85;
+      }
+
+      .modal.active .submit-modal-content {
+        transform: scale(1) translateY(0);
+      }
+
+      .submit-status-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .submit-icon {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+        position: relative;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .submit-icon::after {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        background: var(--accent-gradient);
+        opacity: 0.25;
+        filter: blur(12px);
+        animation: iconHalo 2.4s ease-in-out infinite;
+        z-index: -1;
+      }
+
+      @keyframes iconHalo {
+        0%,
+        100% {
+          opacity: 0.25;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.45;
+          transform: scale(1.1);
+        }
+      }
+
+      .submit-icon.processing {
+        background: rgba(99, 102, 241, 0.15);
+        border: 2px solid var(--accent-primary);
+      }
+
+      .submit-icon.success {
+        background: rgba(16, 185, 129, 0.15);
+        border: 2px solid var(--success);
+        animation: iconPop 0.55s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      }
+
+      .submit-icon.success::after {
+        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+      }
+
+      .submit-icon.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 2px solid var(--danger);
+        animation: iconShake 0.55s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      }
+
+      .submit-icon.error::after {
+        background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+      }
+
+      @keyframes iconPop {
+        0% {
+          transform: scale(0.5);
+        }
+        55% {
+          transform: scale(1.18);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      @keyframes iconShake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        20%,
+        60% {
+          transform: translateX(-8px);
+        }
+        40%,
+        80% {
+          transform: translateX(8px);
+        }
+      }
+
+      .submit-spinner {
+        width: 52px;
+        height: 52px;
+        border: 4px solid rgba(99, 102, 241, 0.18);
+        border-top-color: var(--accent-primary);
+        border-right-color: var(--accent-secondary);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+
+      .submit-icon.success::before {
+        content: "\f00c";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        font-size: 2.25rem;
+        color: var(--success);
+      }
+
+      .submit-icon.error::before {
+        content: "\f00d";
+        font-family: "Font Awesome 6 Free";
+        font-weight: 900;
+        font-size: 2.25rem;
+        color: var(--danger);
+      }
+
+      .submit-title {
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        letter-spacing: 0.01em;
+      }
+
+      .submit-subtitle {
+        font-size: 0.85rem;
+        color: var(--accent-primary);
+        font-weight: 600;
+        margin: 0;
+        min-height: 1.1em;
+        word-break: break-word;
+      }
+
+      .submit-message {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+        margin: 0;
+        max-width: 320px;
+      }
+
+      .submit-message .hint {
+        display: block;
+        margin-top: 0.5rem;
+        font-size: 0.825rem;
+        color: var(--text-muted);
+        font-style: italic;
+      }
+
+      .submit-close-btn {
+        margin-top: 0.5rem;
+        padding: 0.75rem 2rem;
+        background: var(--accent-gradient);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font-family: inherit;
+        letter-spacing: 0.02em;
+      }
+
+      .submit-close-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 26px rgba(99, 102, 241, 0.35);
+      }
+
+      .submit-close-btn:active {
+        transform: translateY(0);
+      }
+
+      .submit-close-btn.error {
+        background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+      }
+
+      .submit-close-btn.error:hover {
+        box-shadow: 0 10px 26px rgba(239, 68, 68, 0.35);
+      }
+
+      @media (max-width: 640px) {
+        .container {
+          padding: 1rem 1rem 8rem;
+        }
+
+        header {
+          padding: 0.6rem 0.85rem;
+        }
+
+        .header-content {
+          gap: 0.5rem;
+        }
+
+        .brand {
+          gap: 0.5rem;
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+
+        .brand img {
+          width: 32px;
+          height: 32px;
+          border-width: 1.5px;
+          flex-shrink: 0;
+        }
+
+        .brand-text {
+          font-size: 1rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+
+        .social-links {
+          gap: 0.5rem;
+          flex-shrink: 0;
+        }
+
+        .social-links a {
+          width: 32px;
+          height: 32px;
+          font-size: 0.9rem;
+        }
+
+        #pinEntry {
+          margin: 2rem auto;
+          padding: 1.5rem;
+        }
+
+        #sticks {
+          padding: 0.5rem 0.65rem;
+        }
+
+        .sticks-content {
+          gap: 0.4rem;
+          flex-wrap: nowrap;
+        }
+
+        .sticks-stats {
+          gap: 0.35rem;
+          flex: 1 1 auto;
+          flex-wrap: nowrap;
+          justify-content: flex-start;
+          overflow: hidden;
+        }
+
+        .stat-pill {
+          padding: 0.3rem 0.55rem;
+          font-size: 0.72rem;
+          gap: 0.3rem;
+          flex: 0 1 auto;
+          min-width: 0;
+        }
+
+        .stat-pill i {
+          font-size: 0.75rem;
+        }
+
+        .stat-pill-text {
+          gap: 0.2rem;
+        }
+
+        .stat-pill-label {
+          display: none;
+        }
+
+        .bulk-actions {
+          justify-content: flex-end;
+          gap: 0.35rem;
+          flex-wrap: wrap;
+          flex-shrink: 0;
+        }
+
+        .range-actions {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          width: 100%;
+        }
+
+        .range-hint { display: none; }
+
+        .bulk-btn {
+          padding: 0.4rem 0.55rem;
+          font-size: 0.75rem;
+        }
+
+        .bulk-btn span {
+          display: none;
+        }
+
+        .bulk-btn i {
+          font-size: 0.9rem;
+        }
+
+        .file-item {
+          padding: 0.5rem 0.75rem;
+        }
+
+        .submit-btn {
+          width: 100%;
+        }
+
+        .submit-wrapper {
+          padding: 0.875rem 1rem;
+        }
+
+        .scroll-controls {
+          right: 1rem;
+          bottom: calc(var(--submit-footer-height) + 0.75rem);
+        }
+
+        .scroll-btn {
+          width: 40px;
+          height: 40px;
+          font-size: 0.85rem;
+        }
+
+        .submit-modal-content {
+          padding: 2.25rem 1.5rem;
+          max-width: 100%;
+        }
+
+        .submit-icon {
+          width: 76px;
+          height: 76px;
+        }
+
+        .submit-spinner {
+          width: 44px;
+          height: 44px;
+        }
+
+        .submit-title {
+          font-size: 1.2rem;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <div class="header-content">
+        <div class="brand">
+          <img src="https://iili.io/FLRJNMG.th.png" alt="NEO-WZML" />
+          <span class="brand-text">NEO-WZML File Selection</span>
+        </div>
+        <div class="social-links">
+          <a
+            href="https://github.com/irisXDR/NEO-WZML"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="GitHub"
+          >
+            <i class="fab fa-github"></i>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <div class="container">
+      <div id="pinEntry" class="card">
+        <div class="pin-icon">
+          <i class="fas fa-lock"></i>
+        </div>
+        <h2>Enter PIN Code</h2>
+        <p>Enter the 4-digit PIN from Telegram to access your files</p>
+        <div class="input-group">
+          <i class="fas fa-key"></i>
+          <input
+            type="text"
+            id="pinInput"
+            placeholder="• • • •"
+            maxlength="4"
+            autocomplete="off"
+            inputmode="numeric"
+            pattern="[0-9]*"
+          />
+        </div>
+        <button id="submitPin">
+          <i class="fas fa-unlock"></i>
+          <span>Verify PIN</span>
+        </button>
+        <div id="errorMessage" class="error-message"></div>
+        <div id="loadingMessage" class="loading">
+          <div class="spinner"></div>
+          <span>Loading files...</span>
+        </div>
+      </div>
+
+      <div id="sticks" aria-label="Selection summary">
+        <div class="sticks-content">
+          <div class="sticks-stats" role="status" aria-live="polite">
+            <div class="stat-pill" title="Selected files">
+              <i class="fas fa-check-circle" aria-hidden="true"></i>
+              <span class="stat-pill-text">
+                <span id="checked_files" class="highlight">0</span>
+                <span class="stat-pill-sep">/</span>
+                <span id="total_files">0</span>
+                <span class="stat-pill-label">files</span>
+              </span>
+            </div>
+            <div class="stat-pill" title="Selected size">
+              <i class="fas fa-database" aria-hidden="true"></i>
+              <span class="stat-pill-text">
+                <span id="checked_size" class="highlight">0 B</span>
+                <span class="stat-pill-sep">/</span>
+                <span id="total_size">0 B</span>
+              </span>
+            </div>
+          </div>
+          <div class="bulk-actions" role="group" aria-label="Bulk selection">
+            <button
+              type="button"
+              id="btnSelectAll"
+              class="bulk-btn"
+              title="Select every file"
+            >
+              <i class="fas fa-check-double" aria-hidden="true"></i>
+              <span>Select all</span>
+            </button>
+            <button
+              type="button"
+              id="btnDeselectAll"
+              class="bulk-btn bulk-btn-secondary"
+              title="Clear selection"
+            >
+              <i class="fas fa-square" aria-hidden="true"></i>
+              <span>Deselect all</span>
+            </button>
+          </div>
+          <div class="bulk-actions range-actions" role="group" aria-label="Range selection">
+            <input type="number" id="rangeFrom" min="1" placeholder="from #" class="range-input" aria-label="Range start">
+            <span class="range-sep">–</span>
+            <input type="number" id="rangeTo" min="1" placeholder="to #" class="range-input" aria-label="Range end">
+            <button type="button" id="btnSelectRange" class="bulk-btn" title="Select files by number range">
+              <i class="fas fa-list-check" aria-hidden="true"></i>
+              <span>Select Range</span>
+            </button>
+            <span class="range-hint">file numbers across all folders</span>
+          </div>
+        </div>
+      </div>
+
+      <form
+        id="fileForm"
+        action=""
+        onsubmit="return s_validate();"
+        method="POST"
+      >
+        <section id="fileSection" class="card">
+          <div class="file-card">
+            <div id="fileTree"></div>
+          </div>
+        </section>
+        <div class="submit-wrapper" id="submitWrapper">
+          <button type="submit" class="submit-btn" id="submitBtn">
+            <i class="fas fa-check"></i> Confirm Selection
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="scroll-controls" id="scrollControls" aria-hidden="true">
+      <button
+        type="button"
+        id="scrollUp"
+        class="scroll-btn"
+        title="Scroll to top"
+        aria-label="Scroll to top"
+      >
+        <i class="fas fa-arrow-up"></i>
+      </button>
+      <button
+        type="button"
+        id="scrollDown"
+        class="scroll-btn"
+        title="Scroll to bottom"
+        aria-label="Scroll to bottom"
+      >
+        <i class="fas fa-arrow-down"></i>
+      </button>
+    </div>
+
+    <div class="modal" id="submitModal" aria-hidden="true" role="dialog">
+      <div class="submit-modal-content">
+        <div class="submit-status-container">
+          <div id="submitIcon" class="submit-icon processing">
+            <div class="submit-spinner"></div>
+          </div>
+          <h3 id="submitTitle" class="submit-title">Submitting Selection</h3>
+          <p id="submitSubtitle" class="submit-subtitle"></p>
+          <p id="submitMessage" class="submit-message">
+            Processing your file selection...
+          </p>
+          <button
+            type="button"
+            id="submitModalClose"
+            class="submit-close-btn"
+            style="display: none"
+          >
+            <i class="fas fa-check"></i>
+            <span>Close</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let filesData = [];
+
+      function s_validate() {
+        if ($("input[type='checkbox']:checked").length == 0) {
+          alert("Please select at least one file!");
+          return false;
+        }
+        return true;
+      }
+
+      $(document).ready(function () {
+        $("#pinInput").focus();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const gid = urlParams.get("gid");
+        const pin = urlParams.get("pin");
+        const type = urlParams.get("type") || "torrent";
+        const endpoint =
+          type === "mega"
+            ? "mega"
+            : type === "terabox"
+            ? "terabox"
+            : type === "rclone"
+            ? "rclone"
+            : "torrent";
+
+        if (pin) {
+          $("#pinInput").val(pin);
+        }
+
+        $("#submitPin").click(function () {
+          $("#errorMessage").removeClass("show").text("");
+          const pinValue = $("#pinInput").val();
+
+          if (!pinValue) {
+            $("#errorMessage").addClass("show").text("Please enter a PIN code");
+            return;
+          }
+
+          if (!gid) {
+            $("#errorMessage")
+              .addClass("show")
+              .text("GID parameter is missing!");
+            return;
+          }
+
+          $("#loadingMessage").addClass("show");
+
+          $.ajax({
+            url: `/app/files/${endpoint}?gid=${gid}&pin=${pinValue}`,
+            method: "GET",
+            success: function (data) {
+              $("#loadingMessage").removeClass("show");
+
+              if (data.error) {
+                $("#errorMessage").addClass("show").text(data.message);
+                return;
+              }
+
+              filesData = data.files;
+
+              $("#pinEntry").fadeOut(300, function () {
+                $("#sticks").addClass("show").hide().fadeIn(300, function () {
+                  updateLayoutMetrics();
+                });
+                $("#fileSection").addClass("show").hide().fadeIn(300);
+                $("#submitWrapper").addClass("show");
+                $("#scrollControls")
+                  .addClass("show")
+                  .attr("aria-hidden", "false");
+                updateLayoutMetrics();
+                updateScrollButtonsVisibility();
+              });
+
+              const html = generateHtmlTree(filesData);
+              $("#fileTree").html(html);
+
+              docready();
+            },
+            error: function (xhr) {
+              $("#loadingMessage").removeClass("show");
+              const errorMsg =
+                xhr.responseJSON?.message ||
+                xhr.responseText ||
+                "Failed to load files";
+              $("#errorMessage")
+                .addClass("show")
+                .text("Error: " + errorMsg);
+              console.error("AJAX error:", xhr);
+            },
+          });
+        });
+
+        $("#pinInput").keypress(function (e) {
+          if (e.which == 13) {
+            $("#submitPin").click();
+          }
+        });
+
+        const $modal = $("#submitModal");
+        const $submitBtn = $("#submitBtn");
+        let isSubmitting = false;
+        let autoCloseTimer = null;
+        let autoCloseTickId = null;
+
+        function showSubmitModal(meta) {
+          const fileCount = meta && meta.fileCount;
+          $("#submitIcon")
+            .removeClass("success error")
+            .addClass("processing")
+            .html('<div class="submit-spinner"></div>');
+          $("#submitTitle").text("Submitting Selection");
+          $("#submitSubtitle").text(
+            fileCount
+              ? `${fileCount} file${fileCount === 1 ? "" : "s"} selected`
+              : "",
+          );
+          $("#submitMessage").html(
+            "Processing your file selection..." +
+              '<span class="hint">' +
+              "Large MEGA folders can take a few seconds — please wait." +
+              "</span>",
+          );
+          $("#submitModalClose").hide().removeClass("error");
+          $modal.attr("aria-hidden", "false").addClass("active");
+        }
+
+        function updateSubmitModal(kind, opts) {
+          opts = opts || {};
+          const $icon = $("#submitIcon");
+          const $close = $("#submitModalClose");
+
+          if (kind === "success") {
+            $icon
+              .removeClass("processing error")
+              .addClass("success")
+              .empty();
+            $("#submitTitle").text("Selection Submitted");
+            $("#submitMessage").html(
+              "Your file selection has been saved." +
+                '<span class="hint">' +
+                "Head back to Telegram — your download will start shortly." +
+                '<br>This page will close in <b><span id="autoCloseCountdown">5</span>s</b>…' +
+                "</span>",
+            );
+            $close
+              .removeClass("error")
+              .html(
+                '<i class="fas fa-xmark"></i><span>Close Now</span>',
+              )
+              .show();
+            $close.off("click.autoclose").on("click.autoclose", function () {
+              if (autoCloseTickId) {
+                window.clearInterval(autoCloseTickId);
+                autoCloseTickId = null;
+              }
+              attemptCloseTab();
+            });
+          } else {
+            $icon
+              .removeClass("processing success")
+              .addClass("error")
+              .empty();
+            $("#submitTitle").text("Submission Failed");
+            $("#submitSubtitle").text("");
+            $("#submitMessage").html(
+              (opts.message ? String(opts.message) : "Something went wrong.") +
+                '<span class="hint">' +
+                "You can dismiss this message and try again." +
+                "</span>",
+            );
+            $close
+              .addClass("error")
+              .html(
+                '<i class="fas fa-rotate-right"></i><span>Try Again</span>',
+              )
+              .show();
+            $close.off("click.autoclose");
+          }
+        }
+
+        function hideSubmitModal() {
+          $modal.removeClass("active").attr("aria-hidden", "true");
+          if (autoCloseTimer) {
+            clearTimeout(autoCloseTimer);
+            autoCloseTimer = null;
+          }
+          if (autoCloseTickId) {
+            clearInterval(autoCloseTickId);
+            autoCloseTickId = null;
+          }
+        }
+
+        function attemptCloseTab() {
+          let closed = false;
+          try {
+            window.close();
+            closed = true;
+          } catch (_) {}
+          window.setTimeout(function () {
+            if (closed) return;
+            $("#submitTitle").text("Selection Submitted");
+            $("#submitMessage").html(
+              "Your file selection has been saved." +
+                '<span class="hint">' +
+                "Head back to Telegram — your download will start shortly. " +
+                "You can safely close this tab now." +
+                "</span>",
+            );
+            $("#submitModalClose")
+              .removeClass("error")
+              .html(
+                '<i class="fas fa-check"></i><span>OK</span>',
+              )
+              .show();
+            $modal.attr("aria-hidden", "false").addClass("active");
+          }, 300);
+        }
+
+        function setSubmitting(flag) {
+          isSubmitting = flag;
+          if (flag) {
+            $submitBtn
+              .prop("disabled", true)
+              .attr("aria-busy", "true")
+              .html(
+                '<div class="spinner" style="border-color: rgba(255,255,255,0.35); border-top-color: white;"></div>' +
+                  "<span>Submitting…</span>",
+              );
+          } else {
+            $submitBtn
+              .prop("disabled", false)
+              .removeAttr("aria-busy")
+              .html('<i class="fas fa-check"></i> Confirm Selection');
+          }
+        }
+
+        $("#submitModalClose").on("click", hideSubmitModal);
+
+        $modal.on("click", function (e) {
+          if (e.target !== this) return;
+          if ($("#submitIcon").hasClass("processing")) return;
+          hideSubmitModal();
+        });
+
+        $(document).on("keydown.submitModal", function (e) {
+          if (e.key === "Escape" && $modal.hasClass("active")) {
+            if (!$("#submitIcon").hasClass("processing")) hideSubmitModal();
+          }
+        });
+
+        $("#fileForm").submit(function (e) {
+          e.preventDefault();
+          if (isSubmitting) return;
+
+          const formData = buildJsonFromState();
+          const fileCount = formData.selected_ids
+            ? formData.selected_ids.length
+            : 0;
+
+          setSubmitting(true);
+          showSubmitModal({ fileCount: fileCount });
+
+          $.ajax({
+            url: `/app/files/${endpoint}?gid=${gid}&pin=${$("#pinInput").val()}&mode=selection`,
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(formData),
+            success: function (data) {
+              setSubmitting(false);
+              if (data && data.error) {
+                updateSubmitModal("error", {
+                  message: data.message || "Unknown server error.",
+                });
+                return;
+              }
+              updateSubmitModal("success");
+              let remaining = 5;
+              autoCloseTickId = window.setInterval(function () {
+                remaining -= 1;
+                const $el = $("#autoCloseCountdown");
+                if ($el.length) $el.text(Math.max(remaining, 0));
+                if (remaining <= 0) {
+                  window.clearInterval(autoCloseTickId);
+                  autoCloseTickId = null;
+                  attemptCloseTab();
+                }
+              }, 1000);
+            },
+            error: function (xhr) {
+              setSubmitting(false);
+              const errorMsg =
+                (xhr.responseJSON && xhr.responseJSON.message) ||
+                xhr.statusText ||
+                "Could not reach the server.";
+              updateSubmitModal("error", { message: errorMsg });
+            },
+          });
+        });
+
+        function escapeHtml(s) {
+          if (s === undefined || s === null) return "";
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        }
+
+        let _fileCounter = 0;
+
+        function generateHtmlTree(nodes) {
+          if (!nodes || nodes.length === 0)
+            return '<p class="empty-state">No files found</p>';
+
+          _fileCounter = 0;
+          let html = '<ul id="treeview">';
+          nodes.forEach((node) => {
+            html += generateNodeHtml(node);
+          });
+          html += "</ul>";
+          return html;
+        }
+
+        function generateNodeHtml(node) {
+          let html = "<li";
+
+          if (node.type === "folder") {
+            html += ' class="parent"';
+          }
+
+          html += ">";
+
+          html += '<div class="file-item">';
+
+          const isChecked = node.selected ? " checked" : "";
+          const safeId = encodeURIComponent(String(node.id));
+          const safeName = escapeHtml(node.name);
+          const safeSize = Number(node.size) || 0;
+
+          if (node.type === "folder") {
+            html += `<input type="checkbox" name="foldernode_${safeId}" id="foldernode_${safeId}"${isChecked} data-size="0" data-type="folder">`;
+            html +=
+              '<div class="file-icon folder"><i class="fas fa-folder"></i></div>';
+            html += `<div class="file-info">`;
+            html += `<div class="file-name">${safeName}</div>`;
+            html += `</div>`;
+            html +=
+              '<div class="folder-toggle"><i class="fas fa-chevron-right"></i></div>';
+          } else {
+            _fileCounter++;
+            html += `<span class="file-pos-badge">${_fileCounter}</span>`;
+            html += `<input type="checkbox" name="filenode_${safeId}" id="filenode_${safeId}"${isChecked} data-size="${safeSize}" data-type="file" data-pos="${_fileCounter}">`;
+            html += '<div class="file-icon"><i class="fas fa-file"></i></div>';
+            html += `<div class="file-info">`;
+            html += `<div class="file-name">${safeName}</div>`;
+            if (node.size) {
+              html += `<div class="file-meta">${humanFileSize(node.size)}`;
+              if (node.progress !== undefined && node.progress < 100) {
+                html += ` • ${Number(node.progress).toFixed(1)}% downloaded`;
+              }
+              html += `</div>`;
+            }
+            html += `</div>`;
+          }
+
+          html += "</div>";
+
+          if (node.children && node.children.length > 0) {
+            html += "<ul>";
+            node.children.forEach((child) => {
+              html += generateNodeHtml(child);
+            });
+            html += "</ul>";
+          }
+
+          html += "</li>";
+          return html;
+        }
+
+        function buildJsonFromState() {
+          const selected_ids = [];
+          const unselected_ids = [];
+          const FILE_PREFIX = "filenode_";
+          const fileInputs = document.querySelectorAll(
+            'input[name^="filenode_"]',
+          );
+          for (let i = 0; i < fileInputs.length; i++) {
+            const el = fileInputs[i];
+            const rawId = el.id || "";
+            let id = rawId.startsWith(FILE_PREFIX)
+              ? rawId.substring(FILE_PREFIX.length)
+              : rawId;
+            try {
+              id = decodeURIComponent(id);
+            } catch (_) {}
+            if (el.checked) {
+              selected_ids.push(id);
+            } else {
+              unselected_ids.push(id);
+            }
+          }
+          return { selected_ids: selected_ids, unselected_ids: unselected_ids };
+        }
+
+        function cascadeToDescendants(container, checked) {
+          container
+            .find('> ul input[type="checkbox"]')
+            .prop("checked", checked)
+            .prop("indeterminate", false);
+        }
+
+        function updateParentFolders(container) {
+          function updateParent(element) {
+            let parentLi = element.parent().closest("li.parent");
+            if (parentLi.length === 0) return;
+
+            let parentCheckbox = parentLi.find(
+              '> .file-item input[type="checkbox"]',
+            );
+            if (parentCheckbox.length === 0) return;
+
+            let counts = countDescendantFiles(parentLi);
+
+            if (counts.total === 0) {
+              parentCheckbox.prop("checked", false);
+              parentCheckbox.prop("indeterminate", false);
+            } else if (counts.checked === counts.total) {
+              parentCheckbox.prop("checked", true);
+              parentCheckbox.prop("indeterminate", false);
+            } else if (counts.checked === 0) {
+              parentCheckbox.prop("checked", false);
+              parentCheckbox.prop("indeterminate", false);
+            } else {
+              parentCheckbox.prop("checked", false);
+              parentCheckbox.prop("indeterminate", true);
+            }
+
+            updateParent(parentLi);
+          }
+
+          updateParent(container);
+        }
+
+        function countDescendantFiles(li) {
+          const fileInputs = li.find(
+            '> ul input[type="checkbox"][data-type="file"]',
+          );
+          const total = fileInputs.length;
+          const checked = fileInputs.filter(":checked").length;
+          return { total: total, checked: checked };
+        }
+
+        function updateAllFolderStates() {
+          let folders = $("li.parent").toArray();
+
+          folders.sort(function (a, b) {
+            return (
+              $(b).parents("li.parent").length -
+              $(a).parents("li.parent").length
+            );
+          });
+
+          folders.forEach(function (folder) {
+            let folderCheckbox = $(folder).find(
+              '> .file-item input[type="checkbox"]',
+            );
+            if (folderCheckbox.length === 0) return;
+
+            let counts = countDescendantFiles($(folder));
+
+            if (counts.total === 0) {
+              folderCheckbox.prop("checked", false);
+              folderCheckbox.prop("indeterminate", false);
+            } else if (counts.checked === counts.total) {
+              folderCheckbox.prop("checked", true);
+              folderCheckbox.prop("indeterminate", false);
+            } else if (counts.checked === 0) {
+              folderCheckbox.prop("checked", false);
+              folderCheckbox.prop("indeterminate", false);
+            } else {
+              folderCheckbox.prop("checked", false);
+              folderCheckbox.prop("indeterminate", true);
+            }
+          });
+        }
+
+        function docready() {
+          updateAllFolderStates();
+
+          checked_size();
+          checkingfiles();
+
+          var total_files = $("input[name^='filenode_']").length;
+          $("#total_files").text(total_files);
+
+          var total_size = 0;
+          $("input[name^='filenode_']").each(function () {
+            var size = parseFloat($(this).data("size"));
+            total_size += size;
+          });
+          $("#total_size").text(humanFileSize(total_size));
+
+          $(".folder-toggle").click(function (e) {
+            e.stopPropagation();
+            $(this).toggleClass("open");
+            $(this).closest("li.parent").toggleClass("open");
+          });
+
+          $(".file-item").click(function (e) {
+            if (
+              !$(e.target).is('input[type="checkbox"]') &&
+              !$(e.target).closest(".folder-toggle").length
+            ) {
+              $(this).find('input[type="checkbox"]').click();
+            }
+          });
+
+          $('input[type="checkbox"]').change(function (e) {
+            var checked = $(this).prop("checked"),
+              container = $(this).closest("li");
+
+            if (container.hasClass("parent")) {
+              cascadeToDescendants(container, checked);
+            }
+
+            updateParentFolders(container);
+
+            checkingfiles();
+            checked_size();
+          });
+        }
+
+        function checked_size() {
+          var checked_size = 0;
+          var checkedboxes = $("input[name^='filenode_']:checked");
+          checkedboxes.each(function () {
+            var size = parseFloat($(this).data("size"));
+            checked_size += size;
+          });
+          $("#checked_size").text(humanFileSize(checked_size));
+        }
+
+        function checkingfiles() {
+          var checked_files = $("input[name^='filenode_']:checked").length;
+          $("#checked_files").text(checked_files);
+        }
+
+        function humanFileSize(size) {
+          if (size === 0) return "0 B";
+          var i = -1;
+          var byteUnits = [" KB", " MB", " GB", " TB", "PB", "EB", "ZB", "YB"];
+          do {
+            size = size / 1024;
+            i++;
+          } while (size > 1024 && i < byteUnits.length - 1);
+          return Math.max(size, 0).toFixed(1) + byteUnits[i];
+        }
+
+        $("#btnSelectAll").click(function () {
+          $("input[name^='filenode_']").prop("checked", true);
+          updateAllFolderStates();
+          checkingfiles();
+          checked_size();
+        });
+
+        $("#btnDeselectAll").click(function () {
+          $("input[name^='filenode_']").prop("checked", false);
+          updateAllFolderStates();
+          checkingfiles();
+          checked_size();
+        });
+
+        // ── Range Selection ───────────────────────────────────────────────────
+        function selectRange(lo, hi) {
+          const $files = $("input[name^='filenode_']");
+          const total = $files.length;
+          if (total === 0) {
+            alert("No files loaded yet.");
+            return;
+          }
+          lo = Math.max(1, Math.min(lo, hi));
+          hi = Math.min(total, Math.max(lo, hi));
+          if (lo > total) {
+            alert(`Only ${total} file${total === 1 ? "" : "s"} available.`);
+            return;
+          }
+          $files.each(function () {
+            const pos = parseInt($(this).data("pos"), 10) || ($files.index(this) + 1);
+            if (pos >= lo && pos <= hi) {
+              $(this).prop("checked", true);
+            }
+          });
+          updateAllFolderStates();
+          checkingfiles();
+          checked_size();
+        }
+
+        $("#btnSelectRange").click(function () {
+          const fromVal = $("#rangeFrom").val().trim();
+          const toVal = $("#rangeTo").val().trim();
+          if (!fromVal || !toVal) {
+            alert("Please enter both a start and end number.");
+            return;
+          }
+          const lo = parseInt(fromVal, 10);
+          const hi = parseInt(toVal, 10);
+          if (isNaN(lo) || isNaN(hi) || lo < 1 || hi < 1) {
+            alert("Please enter valid positive numbers.");
+            return;
+          }
+          selectRange(lo, hi);
+        });
+
+        // Shift-click range selection
+        let _lastCheckedIdx = null;
+        $(document).on("click", "input[name^='filenode_']", function (e) {
+          const $files = $("input[name^='filenode_']");
+          const idx = $files.index(this);
+          if (e.shiftKey && _lastCheckedIdx !== null && idx !== -1 && idx !== _lastCheckedIdx) {
+            const lo = Math.min(_lastCheckedIdx, idx);
+            const hi = Math.max(_lastCheckedIdx, idx);
+            $files.slice(lo, hi + 1).prop("checked", true);
+            updateAllFolderStates();
+            checkingfiles();
+            checked_size();
+          }
+          if (idx !== -1) _lastCheckedIdx = idx;
+        });
+
+        $("#scrollUp").click(function () {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        $("#scrollDown").click(function () {
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: "smooth",
+          });
+        });
+
+        function updateBrandHeaderHeight() {
+          const header = document.querySelector("header");
+          if (!header) return;
+          const h = header.offsetHeight;
+          if (h > 0) {
+            document.documentElement.style.setProperty(
+              "--brand-header-height",
+              h + "px",
+            );
+          }
+        }
+
+        function updateSticksHeight() {
+          const sticks = document.getElementById("sticks");
+          if (!sticks || !sticks.classList.contains("show")) return;
+          const h = sticks.offsetHeight;
+          if (h > 0) {
+            document.documentElement.style.setProperty(
+              "--sticks-height",
+              h + "px",
+            );
+          }
+        }
+
+        function updateLayoutMetrics() {
+          updateBrandHeaderHeight();
+          updateSticksHeight();
+        }
+
+        updateBrandHeaderHeight();
+
+        function updateScrollButtonsVisibility() {
+          const $controls = $("#scrollControls");
+          if (!$controls.hasClass("show")) return;
+          const scrollY =
+            window.scrollY || document.documentElement.scrollTop || 0;
+          const viewport = window.innerHeight;
+          const docHeight =
+            document.documentElement.scrollHeight ||
+            document.body.scrollHeight ||
+            0;
+          const atTop = scrollY <= 16;
+          const atBottom = scrollY + viewport >= docHeight - 16;
+          const pageScrollable = docHeight > viewport + 16;
+
+          $("#scrollUp").css({
+            opacity: !pageScrollable || atTop ? 0.35 : 1,
+            "pointer-events":
+              !pageScrollable || atTop ? "none" : "auto",
+          });
+          $("#scrollDown").css({
+            opacity: !pageScrollable || atBottom ? 0.35 : 1,
+            "pointer-events":
+              !pageScrollable || atBottom ? "none" : "auto",
+          });
+        }
+
+        let scrollTick = false;
+        window.addEventListener(
+          "scroll",
+          function () {
+            if (scrollTick) return;
+            scrollTick = true;
+            window.requestAnimationFrame(function () {
+              updateScrollButtonsVisibility();
+              scrollTick = false;
+            });
+          },
+          { passive: true },
+        );
+
+        let resizeTick = false;
+        window.addEventListener("resize", function () {
+          if (resizeTick) return;
+          resizeTick = true;
+          window.requestAnimationFrame(function () {
+            updateLayoutMetrics();
+            updateScrollButtonsVisibility();
+            resizeTick = false;
+          });
+        });
+
+        window.addEventListener("orientationchange", function () {
+          setTimeout(function () {
+            updateLayoutMetrics();
+            updateScrollButtonsVisibility();
+          }, 150);
+        });
+
+        if (window.ResizeObserver) {
+          const headerEl = document.querySelector("header");
+          if (headerEl) {
+            new ResizeObserver(function () {
+              updateBrandHeaderHeight();
+            }).observe(headerEl);
+          }
+          const sticksEl = document.getElementById("sticks");
+          if (sticksEl) {
+            new ResizeObserver(function () {
+              updateSticksHeight();
+              updateScrollButtonsVisibility();
+            }).observe(sticksEl);
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

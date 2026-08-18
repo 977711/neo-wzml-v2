@@ -1,0 +1,22 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local bot configuration (copy sample_config.py to config.py — never commit secrets)
+config.py
+
+.venv/*
+.netrc
+log.txt
+cfg.zip
+accounts/*
+thumbnails/*
+rclone/*
+tokens/*
+cookies/*
+mediainfo/*
+list_drives.txt
+shortener.txt
+cookies.txt
+downloads/*
