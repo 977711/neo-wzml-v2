@@ -36,6 +36,9 @@ from bot.helper.ext_utils.status_utils import get_readable_message
 
 
 async def send_message(message, text, buttons=None, block=True, photo=None, _recursion_depth=0, **kwargs):
+    if TgClient.bot is None:
+        LOGGER.warning("TgClient.bot is not initialized yet. Skipping message send.")
+        return None
     try:
         if photo:
             try:
