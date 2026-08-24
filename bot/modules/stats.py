@@ -52,7 +52,7 @@ commands = {
     ),
     "7z": (["7z", "i"], r"7-Zip ([\d.]+)"),
     "aiohttp": (["uv", "pip", "show", "aiohttp"], r"Version: ([\d.]+)"),
-    "wzgram": (["uv", "pip", "show", "wzgram"], r"Version: ([\d.]+)"),
+    "pyroblack": (["uv", "pip", "show", "pyroblack"], r"Version: ([\d.]+)"),
     "gapi": (["uv", "pip", "show", "google-api-python-client"], r"Version: ([\d.]+)"),
     "mega": (["echo", "8.1.1"], r"([\d.]+)"),  # MegaSDK v8.1.1 compiled from source
 }
