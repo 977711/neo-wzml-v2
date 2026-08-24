@@ -80,22 +80,16 @@ async def select(_, message):
         return
 
     try:
-        if task.listener.is_qbit:
-            id_ = task.hash()
-        else:
-            id_ = task.gid()
+        id_ = task.gid()
 
         if not task.queued:
             await task.update()
-            if task.listener.is_qbit:
-                await TorrentManager.qbittorrent.torrents.stop([id_])
-            else:
-                try:
-                    await TorrentManager.aria2.forcePause(id_)
-                except Exception as e:
-                    LOGGER.error(
-                        f"{e} Error in pause, this mostly happens after abuse aria2"
-                    )
+            try:
+                await TorrentManager.aria2.forcePause(id_)
+            except Exception as e:
+                LOGGER.error(
+                    f"{e} Error in pause, this mostly happens after abuse aria2"
+                )
         task.listener.select = True
     except Exception:
         await send_message(message, "This is not a bittorrent task!")
@@ -225,46 +219,24 @@ async def confirm_selection(_, query):
         await query.answer()
         id_ = data[3]
         if hasattr(task, "seeding"):
-            if task.listener.is_qbit:
-                tor_info = (
-                    await TorrentManager.qbittorrent.torrents.info(hashes=[id_])
-                )[0]
-                path = tor_info.content_path.rsplit("/", 1)[0]
-                res = await TorrentManager.qbittorrent.torrents.files(id_)
-                for f in res:
-                    if f.priority == 0:
-                        f_paths = [f"{path}/{f.name}", f"{path}/{f.name}.!qB"]
-                        for f_path in f_paths:
-                            if await aiopath.exists(f_path):
-                                try:
-                                    await remove(f_path)
-                                except Exception:
-                                    pass
-                if not task.queued:
-                    await TorrentManager.qbittorrent.torrents.start([id_])
-            else:
-                res = await TorrentManager.aria2.getFiles(id_)
-                for f in res:
-                    if f["selected"] == "false" and await aiopath.exists(f["path"]):
-                        try:
-                            await remove(f["path"])
-                        except Exception:
-                            pass
-                if not task.queued:
+            res = await TorrentManager.aria2.getFiles(id_)
+            for f in res:
+                if f["selected"] == "false" and await aiopath.exists(f["path"]):
                     try:
-                        await TorrentManager.aria2.unpause(id_)
-                    except Exception as e:
-                        LOGGER.error(
-                            f"{e} Error in resume, this mostly happens after abuse aria2. Try to use select cmd again!"
-                        )
+                        await remove(f["path"])
+                    except Exception:
+                        pass
+            if not task.queued:
+                try:
+                    await TorrentManager.aria2.unpause(id_)
+                except Exception as e:
+                    LOGGER.error(
+                        f"{e} Error in resume, this mostly happens after abuse aria2. Try to use select cmd again!"
+                    )
 
         try:
-            if task.listener.is_qbit:
-                res = await TorrentManager.qbittorrent.torrents.files(id_)
-                size = sum(f.size for f in res if f.priority != 0)
-            else:
-                res = await TorrentManager.aria2.getFiles(id_)
-                size = sum(int(f["length"]) for f in res if f["selected"] == "true")
+            res = await TorrentManager.aria2.getFiles(id_)
+            size = sum(int(f["length"]) for f in res if f["selected"] == "true")
             
             task.listener.size = size
             if limit_exceeded := await limit_checker(task.listener):

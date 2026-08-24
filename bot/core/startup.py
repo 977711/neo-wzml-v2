@@ -20,8 +20,6 @@ from bot import (
     var_list,
     user_data,
     excluded_extensions,
-    qbit_options,
-    QBIT_DEFAULT_WEB_PASSWORD,
     rss_dict,
     sudo_users,
 )
@@ -36,52 +34,6 @@ def _safe_int(value, default=0):
         return int(value)
     except (TypeError, ValueError):
         return default
-
-
-async def _ensure_qbit_web_password(bot_id=None):
-    if qbit_options.get("web_ui_password") == QBIT_DEFAULT_WEB_PASSWORD:
-        return
-
-    current = qbit_options.get("web_ui_password")
-    if current is None:
-        LOGGER.info("Applying qBittorrent WebUI password from startup settings.")
-    elif len(str(current)) < 6:
-        LOGGER.warning(
-            "Migrating qBittorrent WebUI password to meet qBittorrent 5.2+ length rules."
-        )
-    else:
-        LOGGER.info("Overriding qBittorrent WebUI password from startup settings.")
-
-    qbit_options["web_ui_password"] = QBIT_DEFAULT_WEB_PASSWORD
-    if bot_id and database.db is not None:
-        await database.db.settings.qbittorrent.update_one(
-            {"_id": bot_id},
-            {"$set": {"web_ui_password": QBIT_DEFAULT_WEB_PASSWORD}},
-            upsert=True,
-        )
-
-
-async def update_qb_options():
-    LOGGER.info("Get qBittorrent options from server")
-    if not qbit_options:
-        if not TorrentManager.qbittorrent:
-            LOGGER.warning(
-                "qBittorrent is not initialized. Skipping qBittorrent options update."
-            )
-            return
-        opt = await TorrentManager.qbittorrent.app.preferences()
-        qbit_options.update(opt)
-        del qbit_options["listen_port"]
-        for k in list(qbit_options.keys()):
-            if k.startswith("rss"):
-                del qbit_options[k]
-        await _ensure_qbit_web_password(TgClient.ID)
-        await TorrentManager.qbittorrent.app.set_preferences(
-            {"web_ui_password": QBIT_DEFAULT_WEB_PASSWORD}
-        )
-    else:
-        await _ensure_qbit_web_password(TgClient.ID)
-        await TorrentManager.qbittorrent.app.set_preferences(qbit_options)
 
 
 async def update_aria2_options():
@@ -179,13 +131,6 @@ async def load_settings():
             {"_id": BOT_ID}, {"_id": 0}
         ):
             aria2_options.update(a2c_options)
-
-        if not Config.DISABLE_TORRENTS:
-            if qbit_opt := await database.db.settings.qbittorrent.find_one(
-                {"_id": BOT_ID}, {"_id": 0}
-            ):
-                qbit_options.update(qbit_opt)
-                await _ensure_qbit_web_password(BOT_ID)
 
         if await database.db.users[BOT_ID].find_one():
             rows = database.db.users[BOT_ID].find({})
@@ -302,8 +247,6 @@ async def save_settings():
         await database.db.settings.aria2c.update_one(
             {"_id": TgClient.ID}, {"$set": aria2_options}, upsert=True
         )
-    if await database.db.settings.qbittorrent.find_one({"_id": TgClient.ID}) is None:
-        await database.save_qbit_settings()
 
 
 async def update_variables():
@@ -345,7 +288,7 @@ async def update_variables():
                 LOGGER.error(f"SUDO_USERS entry {id_!r} is not a valid user id; skipping.")
 
     if Config.EXCLUDED_EXTENSIONS:
-        new_excluded = ["aria2", "!qB"]
+        new_excluded = ["aria2"]
         for x in Config.EXCLUDED_EXTENSIONS.split():
             cleaned = x.lstrip(".").strip().lower()
             if cleaned and cleaned not in new_excluded:
@@ -398,8 +341,8 @@ async def load_configurations():
         f"--disk-cache=40M --force-save=true --min-split-size=10M --follow-torrent=mem "
         f"--check-certificate=false --optimize-concurrent-downloads=true "
         f"--http-accept-gzip=true --max-file-not-found=0 --max-tries=20 "
-        f"--peer-id-prefix=-qB4520- --reuse-uri=true --content-disposition-default-utf8=true "
-        f"--user-agent=Wget/1.12 --peer-agent=qBittorrent/4.5.2 --quiet=true "
+        f"--reuse-uri=true --content-disposition-default-utf8=true "
+        f"--user-agent=Wget/1.12 --quiet=true "
         f"--summary-interval=0 --max-upload-limit=1K"
     )
     await (await create_subprocess_shell(aria2_cmd)).wait()
@@ -410,16 +353,6 @@ async def load_configurations():
             f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{PORT}"
         )
         await create_subprocess_shell("python3 cron_boot.py")
-
-    if await aiopath.exists("cfg.zip"):
-        LOGGER.info("Restoring JDownloader Configuration...")
-        if await aiopath.exists("/JDownloader/cfg"):
-            await rmtree("/JDownloader/cfg", ignore_errors=True)
-        await (
-            await create_subprocess_exec(
-                "7z", "x", "cfg.zip", "-o/JDownloader", stdout=PIPE, stderr=PIPE
-            )
-        ).wait()
 
     if await aiopath.exists("accounts.zip"):
         if await aiopath.exists("accounts"):
@@ -445,12 +378,3 @@ async def load_configurations():
     LOGGER.info("About to initialize TorrentManager...")
     await TorrentManager.initiate()
     LOGGER.info("TorrentManager initialized successfully")
-
-    if Config.DISABLE_TORRENTS:
-        LOGGER.info("Torrents are disabled. Skipping qBittorrent initialization.")
-    else:
-        try:
-            await _ensure_qbit_web_password(TgClient.ID)
-            await TorrentManager.qbittorrent.app.set_preferences(qbit_options)
-        except Exception as e:
-            LOGGER.error(f"Failed to configure qBittorrent: {e}")

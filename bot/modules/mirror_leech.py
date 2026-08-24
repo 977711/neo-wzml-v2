@@ -41,13 +41,11 @@ from bot.helper.mirror_leech_utils.download_utils.direct_link_generator import (
     direct_link_generator,
 )
 from bot.helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
-from bot.helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
 from bot.helper.mirror_leech_utils.download_utils.mega_download import add_mega_download
 from bot.helper.mirror_leech_utils.download_utils.terabox_download import (
     add_terabox_download,
     add_terabox_account_download,
 )
-from bot.helper.mirror_leech_utils.download_utils.qbit_download import add_qb_torrent
 from bot.helper.mirror_leech_utils.download_utils.rclone_download import (
     add_rclone_download,
     add_rclone_web_selection,
@@ -69,9 +67,7 @@ class Mirror(TaskListener):
         self,
         client,
         message,
-        is_qbit=False,
         is_leech=False,
-        is_jd=False,
         is_uphoster=False,
         same_dir=None,
         bulk=None,
@@ -90,9 +86,7 @@ class Mirror(TaskListener):
         self.same_dir = same_dir
         self.bulk = bulk
         super().__init__()
-        self.is_qbit = is_qbit
         self.is_leech = is_leech
-        self.is_jd = is_jd
         self.is_uphoster = is_uphoster
 
     async def new_event(self):
@@ -354,9 +348,7 @@ class Mirror(TaskListener):
             await Mirror(
                 self.client,
                 nextmsg,
-                self.is_qbit,
                 self.is_leech,
-                self.is_jd,
                 self.is_uphoster,
                 self.same_dir,
                 self.bulk,
@@ -486,9 +478,7 @@ class Mirror(TaskListener):
         self._set_mode_engine()
 
         if (
-            not self.is_jd
-            and not self.is_qbit
-            and not is_magnet(self.link)
+            not is_magnet(self.link)
             and not is_rclone_path(self.link)
             and not is_gdrive_link(self.link)
             and not self.link.endswith(".torrent")
@@ -535,10 +525,6 @@ class Mirror(TaskListener):
                 )
             elif isinstance(self.link, dict):
                 await add_direct_download(self, path)
-            elif self.is_jd:
-                await add_jd_download(self, path)
-            elif self.is_qbit:
-                await add_qb_torrent(self, path, ratio, seed_time)
             elif is_rclone_path(self.link):
                 if getattr(self, "_rcl_web", False):
                     await add_rclone_web_selection(self, f"{path}/")
@@ -569,26 +555,8 @@ async def mirror(client, message):
     bot_loop.create_task(Mirror(client, message).new_event())
 
 
-async def qb_mirror(client, message):
-    bot_loop.create_task(Mirror(client, message, is_qbit=True).new_event())
-
-
-async def jd_mirror(client, message):
-    bot_loop.create_task(Mirror(client, message, is_jd=True).new_event())
-
-
 async def leech(client, message):
     if Config.DISABLE_LEECH:
         await message.reply("The Leech command is currently disabled.")
         return
     bot_loop.create_task(Mirror(client, message, is_leech=True).new_event())
-
-
-async def qb_leech(client, message):
-    bot_loop.create_task(
-        Mirror(client, message, is_qbit=True, is_leech=True).new_event()
-    )
-
-
-async def jd_leech(client, message):
-    bot_loop.create_task(Mirror(client, message, is_leech=True, is_jd=True).new_event())

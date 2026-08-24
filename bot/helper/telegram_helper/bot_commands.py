@@ -9,13 +9,9 @@ class BotCommands:
 
     _static_commands = {
         "Mirror": ["mirror", "m"],
-        "QbMirror": ["qbmirror", "qm"],
-        "JdMirror": ["jdmirror", "jm"],
         "Ytdl": ["ytdl", "y"],
         "UpHoster": ["uphoster", "up"],
         "Leech": ["leech", "l"],
-        "QbLeech": ["qbleech", "ql"],
-        "JdLeech": ["jdleech", "jl"],
         "YtdlLeech": ["ytdlleech", "yl"],
         "Clone": ["clone", "cl"],
         "Count": "count",
@@ -62,18 +58,10 @@ class BotCommands:
         if Config.SHOW_EXTRA_CMDS:
             if isinstance(commands["Mirror"], list):
                 commands["Mirror"] = commands["Mirror"] + ["zipmirror", "zm", "unzipmirror", "uzm"]
-            if isinstance(commands["QbMirror"], list):
-                commands["QbMirror"] = commands["QbMirror"] + ["qbzipmirror", "qzm", "qbunzipmirror", "quzm"]
-            if isinstance(commands["JdMirror"], list):
-                commands["JdMirror"] = commands["JdMirror"] + ["jdzipmirror", "jzm", "jdunzipmirror", "juzm"]
             if isinstance(commands["UpHoster"], list):
                 commands["UpHoster"] = commands["UpHoster"] + ["zipuphoster", "zup", "unzipuphoster", "uzup"]
             if isinstance(commands["Leech"], list):
                 commands["Leech"] = commands["Leech"] + ["zipleech", "zl", "unzipleech", "uzl"]
-            if isinstance(commands["QbLeech"], list):
-                commands["QbLeech"] = commands["QbLeech"] + ["qbzipleech", "qzl", "qbunzipleech", "quzl"]
-            if isinstance(commands["JdLeech"], list):
-                commands["JdLeech"] = commands["JdLeech"] + ["jdzipleech", "jzl", "jdunzipleech", "juzl"]
 
         plugin_manager = get_plugin_manager()
         if plugin_manager:

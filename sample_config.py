@@ -44,7 +44,6 @@ DELETE_LINKS = False
 CLEAN_LOG_MSG = False
 
 # Disable feature surfaces
-DISABLE_TORRENTS = False
 DISABLE_LEECH = False
 DISABLE_BULK = False
 DISABLE_MULTI = False
@@ -60,11 +59,9 @@ VERIFY_TIMEOUT = 0
 # Task size limits in GB (0 = unlimited)
 DIRECT_LIMIT = 0
 MEGA_LIMIT = 0
-TORRENT_LIMIT = 0
 GDRIVE_LIMIT = 0  # download + upload
 RCLONE_LIMIT = 0  # download + upload
 CLONE_LIMIT = 0
-JD_LIMIT = 0
 YTDLP_LIMIT = 0
 PLAYLIST_LIMIT = 0
 LEECH_LIMIT = 0
@@ -120,11 +117,6 @@ MEGA_EMAIL = ""
 MEGA_PASSWORD = ""
 MEGA_ENABLED = True
 
-# JDownloader
-JD_EMAIL = ""
-JD_PASS = ""
-JD_MODE = False
-
 # Google Drive
 GDRIVE_ID = ""
 GD_DESP = "Uploaded with NEO-WZML"
@@ -157,11 +149,10 @@ INSTADL_API = ""
 DEBRID_LINK_API = ""
 REAL_DEBRID_API = ""
 
-# Web UI / qBittorrent / Aria2c
+# Web UI / Aria2c
 BASE_URL = ""  # public URL of this bot's web frontend
 BASE_URL_PORT = 880
 WEB_PINCODE = True
-TORRENT_TIMEOUT = 0
 
 # RSS
 RSS_DELAY = 600

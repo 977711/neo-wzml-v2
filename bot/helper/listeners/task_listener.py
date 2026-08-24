@@ -198,7 +198,7 @@ class TaskListener(TaskConfig):
             self.name = download.name()
             gid = download.gid()
 
-        if not (self.is_torrent or self.is_qbit):
+        if not self.is_torrent:
             self.seed = False
 
         if multi_links:
@@ -224,14 +224,12 @@ class TaskListener(TaskConfig):
                     raise FileNotFoundError(self.dir)
                 actual_name = files[-1]
                 if actual_name == "yt-dlp-thumb" and len(files) > 1:
-                    # Pick first non-thumb entry
                     other = next(
                         (f for f in files if f != "yt-dlp-thumb"),
                         actual_name,
                     )
                     actual_name = other
 
-                # Treat multiple selected files in task root as one folder
                 root_entries = [f for f in files if f != "yt-dlp-thumb"]
                 if self.select and len(root_entries) > 1:
                     selection_name = self.name.strip("/") or "Selected Files"
@@ -288,11 +286,6 @@ class TaskListener(TaskConfig):
             self.up_dir or self.dir,
             self.get_excluded_extensions_for_download(),
         )
-
-        async with queue_dict_lock:
-            if self.mid in non_queued_dl:
-                non_queued_dl.remove(self.mid)
-        await start_from_queued()
 
         if self.join and not self.is_file:
             await join_files(up_path)
@@ -431,8 +424,6 @@ class TaskListener(TaskConfig):
 
             self.is_file = await aiopath.isfile(up_path)
             self.name = up_path.replace(f"{up_dir}/", "").split("/", 1)[0]
-
-
 
         if self.screen_shots:
             up_path = await self.generate_screenshots(up_path)
@@ -888,8 +879,6 @@ class TaskListener(TaskConfig):
             
             "mega.nz downloads are currently disabled",
             "requesttemperror", "transfertemperror",
-            
-            "jdownloader is currently disabled",
             
             "torrents are disabled", "torrent and magnet downloads are disabled",
             "dead torrent", "torrent already added",

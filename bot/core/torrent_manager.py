@@ -7,7 +7,6 @@ from pathlib import Path
 
 from aioaria2 import Aria2WebsocketClient
 from aiohttp import ClientError
-from aioqbt.client import create_client
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -40,7 +39,6 @@ def wrap_with_retry(obj, max_retries=3):
 
 class TorrentManager:
     aria2 = None
-    qbittorrent = None
 
     @classmethod
     async def initiate(cls):
@@ -54,19 +52,6 @@ class TorrentManager:
                 LOGGER.info("Torrents are disabled.")
                 return
 
-            from time import time as current_time
-            from bot import qb_start_time
-            LOGGER.info(f"Connecting qBittorrent ({current_time() - qb_start_time:.2f}s since start)")
-            cls.qbittorrent = wrap_with_retry(
-                await create_client("http://localhost:8090/api/v2/")
-            )
-            try:
-                version = await cls.qbittorrent.app.version()
-                LOGGER.info(f"qBittorrent connected! Version: {version}")
-            except Exception as test_error:
-                LOGGER.error(f"qBittorrent connection test failed: {type(test_error).__name__}: {test_error}")
-                raise
-
         except Exception as e:
             LOGGER.error(f"Error during initialization: {e}")
             await cls.close_all()
@@ -78,9 +63,6 @@ class TorrentManager:
         if cls.aria2:
             close_tasks.append(cls.aria2.close())
             cls.aria2 = None
-        if cls.qbittorrent:
-            close_tasks.append(cls.qbittorrent.close())
-            cls.qbittorrent = None
         if close_tasks:
             await gather(*close_tasks)
 
@@ -95,15 +77,8 @@ class TorrentManager:
     @classmethod
     async def remove_all(cls):
         await cls.pause_all()
-        if cls.qbittorrent:
-            await gather(
-                cls.qbittorrent.torrents.delete("all", False),
-                cls.aria2.purgeDownloadResult(),
-            )
-        else:
-            await gather(
-                cls.aria2.purgeDownloadResult(),
-            )
+        await cls.aria2.purgeDownloadResult()
+        
         downloads = []
         results = await gather(cls.aria2.tellActive(), cls.aria2.tellWaiting(0, 1000))
         for res in results:
@@ -121,18 +96,11 @@ class TorrentManager:
         download_speed = int(aria2_speed.get("downloadSpeed", "0"))
         upload_speed = int(aria2_speed.get("uploadSpeed", "0"))
 
-        if cls.qbittorrent:
-            qb_speed = await cls.qbittorrent.transfer.info()
-            download_speed += qb_speed.dl_info_speed
-            upload_speed += qb_speed.up_info_speed
-
         return download_speed, upload_speed
 
     @classmethod
     async def pause_all(cls):
         pause_tasks = [cls.aria2.forcePauseAll()]
-        if cls.qbittorrent:
-            pause_tasks.append(cls.qbittorrent.torrents.stop("all"))
         await gather(*pause_tasks)
 
     @classmethod

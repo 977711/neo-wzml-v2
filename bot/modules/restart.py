@@ -14,7 +14,6 @@ from bot.helper.themes import BotTheme
 
 from bot import LOGGER, intervals, scheduler, auth_chats
 from bot.core.config_manager import Config, BinConfig
-from bot.core.jdownloader_booter import jdownloader
 from bot.core.tg_client import TgClient
 from bot.core.torrent_manager import TorrentManager
 from bot.helper.ext_utils.bot_utils import new_task
@@ -188,33 +187,18 @@ async def confirm_restart(_, query):
         await TgClient.stop()
         if scheduler.running:
             scheduler.shutdown(wait=False)
-        if qb := intervals.get("qb"):
-            qb.cancel()
-        if jd := intervals.get("jd"):
-            jd.cancel()
         if st := intervals.get("status"):
             for intvl in list(st.values()):
                 intvl.cancel()
         await clean_all()
         await TorrentManager.close_all()
-        if jdownloader.is_connected:
-            await gather(
-                jdownloader.device.downloadcontroller.stop_downloads(),
-                jdownloader.device.linkgrabber.clear_list(),
-                jdownloader.device.downloads.cleanup(
-                    "DELETE_ALL",
-                    "REMOVE_LINKS_AND_DELETE_FILES",
-                    "ALL",
-                ),
-            )
-            await jdownloader.close()
         proc1 = await create_subprocess_exec(
             "pkill",
             "-9",
             "-f",
-            f"gunicorn|{BinConfig.ARIA2_NAME}|{BinConfig.QBIT_NAME}|"
+            f"gunicorn|{BinConfig.ARIA2_NAME}|"
             f"{BinConfig.FFMPEG_NAME}|{BinConfig.RCLONE_NAME}|"
-            f"JDownloader\\.jar|7z|split",
+            f"7z|split",
         )
         proc2 = await create_subprocess_exec("python3", "update.py")
         rc1, rc2 = await gather(proc1.wait(), proc2.wait())

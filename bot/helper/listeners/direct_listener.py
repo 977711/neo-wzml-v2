@@ -1,4 +1,4 @@
-# This file is a part of NEO-WZML (github.com/irisXDR/NEO-WZML)
+# This file is a part of NEO-WZML (github.com/irisXDR/NEO-WZML)[cite: 6]
 
 from asyncio import sleep, TimeoutError
 from aiohttp.client_exceptions import ClientError

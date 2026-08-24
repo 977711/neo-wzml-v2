@@ -53,21 +53,15 @@ cores = ",".join(str(i) for i in range(threads))
 
 bot_cache = {}
 DOWNLOAD_DIR = "/usr/src/app/downloads/"
-intervals = {"status": {}, "qb": "", "jd": "", "stopAll": False}
-qb_torrents = {}
-jd_downloads = {}
+intervals = {"status": {}, "stopAll": False}
 user_data = {}
 aria2_options = {}
-qbit_options = {}
-QBIT_DEFAULT_WEB_PASSWORD = "adminadmin"
 queued_dl = {}
 queued_up = {}
 status_dict = {}
 task_dict = {}
 rss_dict = {}
 shortener_dict = {}
-# Keys that may be supplied via environment variables (in addition to
-# config.py); keep this list in sync with `update.py`'s `var_list`.
 var_list = [
     "BOT_TOKEN",
     "TELEGRAM_API",
@@ -81,7 +75,7 @@ var_list = [
     "UPDATE_PKGS",
 ]
 auth_chats = {}
-excluded_extensions = ["aria2", "!qB"]
+excluded_extensions = ["aria2"]
 drives_names = []
 drives_ids = []
 index_urls = []
@@ -91,8 +85,6 @@ non_queued_up = set()
 multi_tags = set()
 task_dict_lock = Lock()
 queue_dict_lock = Lock()
-qb_listener_lock = Lock()
-jd_listener_lock = Lock()
 cpu_eater_lock = Lock()
 same_directory_lock = Lock()
 
@@ -100,20 +92,6 @@ list_drives_dict = {}
 categories_dict = {}
 extra_buttons = {}
 shorteners_list = []
-
-try:
-    srun([BinConfig.QBIT_NAME, "-d", f"--profile={getcwd()}"], check=False)
-    qb_start_time = time()
-    LOGGER.info(f"qBittorrent process started: {BinConfig.QBIT_NAME}")
-except FileNotFoundError:
-    qb_start_time = 0
-    LOGGER.error(
-        f"qBittorrent binary not found: {BinConfig.QBIT_NAME}. "
-        "qBittorrent features will be unavailable until installed."
-    )
-except Exception as e:
-    qb_start_time = 0
-    LOGGER.error(f"Failed to start qBittorrent ({BinConfig.QBIT_NAME}): {e}")
 
 async def load_v15_configs():
     from aiofiles import open as aiopen
@@ -141,7 +119,6 @@ async def load_v15_configs():
                 if parsed is None:
                     continue
                 raw_name, drive_id, index_link = parsed
-                # casefold() lowercases, so compare against lowercase target
                 name = "Main Custom" if raw_name.casefold() == "main" else raw_name
                 list_drives_dict[name] = {
                     "drive_id": drive_id,

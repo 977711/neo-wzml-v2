@@ -167,40 +167,11 @@ def add_handlers():
     )
     TgClient.bot.add_handler(
         MessageHandler(
-            qb_mirror,
-            filters=command(BotCommands.QbMirrorCommand, case_sensitive=True)
-            & CustomFilters.authorized,
-        )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            jd_mirror,
-            filters=command(BotCommands.JdMirrorCommand, case_sensitive=True)
-            & CustomFilters.authorized,
-        )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
             leech,
             filters=command(BotCommands.LeechCommand, case_sensitive=True)
             & CustomFilters.authorized,
         )
     )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            qb_leech,
-            filters=command(BotCommands.QbLeechCommand, case_sensitive=True)
-            & CustomFilters.authorized,
-        )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
-            jd_leech,
-            filters=command(BotCommands.JdLeechCommand, case_sensitive=True)
-            & CustomFilters.authorized,
-        )
-    )
-
     TgClient.bot.add_handler(
         MessageHandler(
             uphoster,
@@ -363,55 +334,6 @@ def add_handlers():
 
         bot_commands = get_bot_commands()
 
-        if Config.JD_EMAIL and Config.JD_PASS:
-            jd_mirror_pos = 3
-            if Config.SHOW_EXTRA_CMDS:
-                jd_mirror_pos = 6
-            
-            bot_commands = insert_at(
-                bot_commands,
-                "JdMirror",
-                "[link/file] Mirror to Upload Destination using JDownloader",
-                jd_mirror_pos,
-            )
-            if Config.SHOW_EXTRA_CMDS:
-                bot_commands = insert_at(
-                    bot_commands,
-                    "JdZipMirror",
-                    "[link/file] JDownloader Mirror and compress to zip",
-                    jd_mirror_pos + 1,
-                )
-                bot_commands = insert_at(
-                    bot_commands,
-                    "JdUnzipMirror",
-                    "[link/file] JDownloader Mirror and extract archive",
-                    jd_mirror_pos + 2,
-                )
-            
-            jd_leech_pos = 12
-            if Config.SHOW_EXTRA_CMDS:
-                jd_leech_pos = 21
-            
-            bot_commands = insert_at(
-                bot_commands,
-                "JdLeech",
-                "[link/file] Leech files to Upload to Telegram using JDownloader",
-                jd_leech_pos,
-            )
-            if Config.SHOW_EXTRA_CMDS:
-                bot_commands = insert_at(
-                    bot_commands,
-                    "JdZipLeech",
-                    "[link/file] JDownloader Leech and compress to zip",
-                    jd_leech_pos + 1,
-                )
-                bot_commands = insert_at(
-                    bot_commands,
-                    "JdUnzipLeech",
-                    "[link/file] JDownloader Leech and extract archive",
-                    jd_leech_pos + 2,
-                )
-
         if Config.LOGIN_PASS:
             bot_commands = insert_at(
                 bot_commands, "Login", "[password] Login to Bot", 14
@@ -429,11 +351,9 @@ def add_handlers():
                     )
                 )
             elif Config.SHOW_EXTRA_CMDS and cmd in {
-                "ZipMirror", "UnzipMirror", "QbZipMirror", "QbUnzipMirror",
-                "JdZipMirror", "JdUnzipMirror",
+                "ZipMirror", "UnzipMirror",
                 "ZipUpHoster", "UnzipUpHoster",
-                "ZipLeech", "UnzipLeech", "QbZipLeech", "QbUnzipLeech",
-                "JdZipLeech", "JdUnzipLeech",
+                "ZipLeech", "UnzipLeech",
             }:
                 telegram_commands.append(
                     BotCommand(f"{cmd.lower()}{Config.CMD_SUFFIX}", description)

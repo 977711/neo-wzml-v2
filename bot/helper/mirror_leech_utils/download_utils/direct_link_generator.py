@@ -1,204 +1,34 @@
-import os
-import re
-import time
-from base64 import b64decode, b64encode
+# This file is a part of NEO-WZML (github.com/irisXDR/NEO-WZML)
+
+import os as _os
+from cloudscraper import create_scraper
 from hashlib import sha256
 from http.cookiejar import MozillaCookieJar
 from json import loads
-from os import path as ospath
-from random import choice, randint
-from re import findall, match, search
-from time import sleep
-from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
-from uuid import uuid4
-
-import requests
-from bs4 import BeautifulSoup as B
-from cloudscraper import create_scraper
 from lxml.etree import HTML
-from requests import Session, get, post
+from os import path as ospath
+from re import findall, match, search
+from requests import Session, post, get, RequestException
 from requests.adapters import HTTPAdapter
+from time import sleep, time
+from urllib.parse import parse_qs, urlparse, unquote
 from urllib3.util.retry import Retry
+from uuid import uuid4
+from base64 import b64decode, b64encode
 
-from ....core.config_manager import Config
-from ...ext_utils.exceptions import DirectDownloadLinkException
-from ...ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
-from ...ext_utils.links_utils import is_share_link
-from ...ext_utils.status_utils import speed_string_to_bytes
-
-
-def safe_int_size(size):
-    """Convert size to integer safely, handling various formats"""
-    if size is None:
-        return 0
-    try:
-        if isinstance(size, (int, float)):
-            return int(size)
-        if isinstance(size, str):
-            stripped = size.strip()
-            if stripped.isdigit():
-                return int(stripped)
-            try:
-                return int(float(stripped))
-            except ValueError:
-                try:
-                    return speed_string_to_bytes(stripped)
-                except Exception:  # pylint: disable=broad-exception-caught
-                    return 0
-    except (ValueError, TypeError):
-        pass
-    return 0
-
-
-PROXY_PREFIX = Config.PROXY_PREFIX
-PROXY_URL = Config.PROXY_URL
-proxies = {"http": PROXY_URL, "https": PROXY_URL}
+from bot.core.config_manager import Config
+from bot.helper.ext_utils.exceptions import DirectDownloadLinkException
+from bot.helper.ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
+from bot.helper.ext_utils.links_utils import is_share_link
+from bot.helper.ext_utils.status_utils import speed_string_to_bytes
 
 user_agent = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
 )
 
-TERABOX_PREMIUM_HOST = "d8.freeterabox.com"
-BYPASSBOT_BASE_URL = "https://dl.bypassbot.workers.dev/"
-
-
-def decode64(value):
-    encoded = str(value).strip()
-    encoded += "=" * (-len(encoded) % 4)
-    return b64decode(encoded, altchars=b"-_").decode("utf-8")
-
-
-def _wrap_bypassbot_download(url):
-    if not url:
-        return url
-    if url.startswith(BYPASSBOT_BASE_URL):
-        return url
-    try:
-        parsed = urlparse(str(url).strip())
-    except Exception:
-        return url
-    if not parsed.scheme or not parsed.netloc:
-        return url
-    if "download.aspx" not in (parsed.path or "").lower():
-        return url
-    if not parsed.query:
-        return url
-    encoded = b64encode(url.encode("utf-8")).decode("utf-8")
-    return f"{BYPASSBOT_BASE_URL}{encoded}"
-
-
-def _rewrite_terabox_premium_url(raw_url):
-    if not raw_url:
-        return raw_url
-    try:
-        parsed = urlparse(str(raw_url).strip())
-    except Exception:
-        return raw_url
-    if not parsed.scheme or not parsed.netloc:
-        return raw_url
-    host = (parsed.hostname or "").lower()
-    if not host or host == TERABOX_PREMIUM_HOST:
-        return raw_url
-    premium_aliases = (
-        "1024tera.com",
-        "nephobox.com",
-        "momerybox.com",
-        "freeterabox.com",
-    )
-    if not any(
-        host == alias or host.endswith(f".{alias}") for alias in premium_aliases
-    ):
-        return raw_url
-    return parsed._replace(netloc=TERABOX_PREMIUM_HOST).geturl()
-
-
-def _safe_json_response(response, source_name):
-    try:
-        return response.json()
-    except ValueError:
-        status_code = getattr(response, "status_code", "unknown")
-        text = (getattr(response, "text", "") or "").strip()
-        preview = " ".join(text.split())[:180]
-        if preview:
-            raise DirectDownloadLinkException(
-                f"ERROR: {source_name} returned non-JSON response (status {status_code}): {preview}"
-            )
-        raise DirectDownloadLinkException(
-            f"ERROR: {source_name} returned non-JSON response (status {status_code})."
-        )
-
-
-def _is_api_success(value):
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    if isinstance(value, (int, float)):
-        return int(value) in (0, 1, 200)
-    text = str(value).strip().lower()
-    return text in (
-        "success",
-        "successfully",
-        "ok",
-        "true",
-        "1",
-        "0",
-        "200",
-        "valid",
-        "completed",
-        "done",
-    )
-
-
-def _collect_terabox_entries(payload):
-    entries = []
-
-    def _is_file_entry(item):
-        if not isinstance(item, dict):
-            return False
-        if any(
-            item.get(key)
-            for key in (
-                "directlink",
-                "direct_link",
-                "dlink",
-                "proxylink",
-                "download_url",
-                "url",
-            )
-        ):
-            return True
-        return any(
-            key.startswith("proxy_download") and item.get(key) for key in item.keys()
-        )
-
-    def _walk(value):
-        if isinstance(value, list):
-            for child in value:
-                _walk(child)
-            return
-        if not isinstance(value, dict):
-            return
-        if _is_file_entry(value):
-            entries.append(value)
-            return
-        for key in ("contents", "files", "list", "data", "result", "records", "items"):
-            child = value.get(key)
-            if child is not None:
-                _walk(child)
-
-    _walk(payload)
-    return entries
-
-
-GOFILE_API_TOKEN_FALLBACK = "LyagEWOR9dFMJnfO0G2i0mSd9qwuqIYN"
-GOFILE_API_XWT_FALLBACK = (
-    "87bf2e76a7736153e94c430706b921a2c5420ca8e19da3b7cd964f7deacd862f"
-)
-GOFILE_WEBSITE_TOKEN_CACHE = ""
 gofile_token_cache = None
 
-debrid_link_sites = [
+debrid_link_supported_sites = [
     "1fichier.com",
     "anonfiles.com",
     "bayfiles.com",
@@ -230,7 +60,6 @@ debrid_link_sites = [
     "gofile.io",
     "hexupload.net",
     "hitfile.net",
-    "htfl.net",
     "hulkshare.com",
     "isra.cloud",
     "katfile.com",
@@ -257,6 +86,8 @@ debrid_link_sites = [
     "silkfiles.com",
     "soundcloud.com",
     "streamtape.com",
+    "terabox.com",
+    "teraboxapp.com",
     "tezfiles.com",
     "turb.cc",
     "turb.to",
@@ -293,7 +124,6 @@ debrid_link_sites = [
     "uqload.co",
     "uqload.io",
     "userload.co",
-    "uploadgig.com",
     "usersdrive.com",
     "vidoza.net",
     "voe.sx",
@@ -316,44 +146,15 @@ debrid_link_sites = [
 
 
 def direct_link_generator(link):
-    """direct links generator"""
-    link = str(link).strip()
-    bypassed = _wrap_bypassbot_download(link)
-    if bypassed != link:
-        return bypassed
     domain = urlparse(link).hostname
     if not domain:
         raise DirectDownloadLinkException("ERROR: Invalid URL")
-    elif Config.DEBRID_LINK_API and any(x in domain for x in debrid_link_sites):
+    elif Config.DEBRID_LINK_API and any(
+        x in domain for x in debrid_link_supported_sites
+    ):
         return debrid_link(link)
     elif "yadi.sk" in link or "disk.yandex." in link:
         return yandex_disk(link)
-    elif (
-        "gdlink.dev" in domain
-        or "gdflix.dad" in domain
-        or "vifix.site/gdflix" in domain
-        or "gdflix.dev" in domain
-        or "gdflix.app" in domain
-    ):
-        return gdflix(link)
-    elif "driveseed" in domain:
-        return gdflix(link)
-    elif any(
-        x in domain
-        for x in [
-            "hubcloud",
-            "hubcloud.fit",
-            "hubcloud.one",
-            "hubcloud.pro",
-            "hubcloud.cc",
-            "hubcloud.link",
-            "hubcloud.xyz",
-            "hubcloud.in",
-        ]
-    ):
-        return hubcloud(link)
-    elif "vifix.site/hubcloud" in domain:
-        return hubcloud(link)
     elif "buzzheavier.com" in domain:
         return buzzheavier(link)
     elif "devuploads" in domain:
@@ -366,23 +167,13 @@ def direct_link_generator(link):
         return mediafire(link)
     elif "osdn.net" in domain:
         return osdn(link)
-    elif "sourceforge.net" in domain:
-        return sourceforge(link)
     elif "github.com" in domain:
         return github(link)
     elif "hxfile.co" in domain:
         return hxfile(link)
     elif "1drv.ms" in domain:
         return onedrive(link)
-    elif any(
-        x in domain
-        for x in [
-            "pixeldrain.com",
-            "pixeldra.in",
-            "pixeldrain.net",
-            "cdn.pixeldrain.eu.cc",
-        ]
-    ):
+    elif "pixeldrain.com" in domain:
         return pixeldrain(link)
     elif "racaty" in domain:
         return racaty(link)
@@ -394,10 +185,6 @@ def direct_link_generator(link):
         return krakenfiles(link)
     elif "upload.ee" in domain:
         return uploadee(link)
-    elif "z-lib.gd" in domain:
-        return zlib(link)
-    elif "uploadhaven" in domain:
-        return uploadhaven(link)
     elif "gofile.io" in domain:
         return gofile(link)
     elif "send.cm" in domain:
@@ -406,10 +193,6 @@ def direct_link_generator(link):
         return tmpsend(link)
     elif "easyupload.io" in domain:
         return easyupload(link)
-    elif "mediafile.cc" in domain:
-        return mediafile(link)
-    elif "sharemods.com" in domain:
-        return sharemods(link)
     elif "streamvid.net" in domain:
         return streamvid(link)
     elif "shrdsk.me" in domain:
@@ -420,16 +203,12 @@ def direct_link_generator(link):
         return qiwi(link)
     elif "mp4upload.com" in domain:
         return mp4upload(link)
-    elif "transfer.it" in domain:
-        return transfer_it(link)
     elif "berkasdrive.com" in domain:
         return berkasdrive(link)
     elif "swisstransfer.com" in domain:
         return swisstransfer(link)
     elif "instagram.com" in domain:
         return instagram(link)
-    elif "apkadmin.com" in domain:
-        return apkadmin(link)
     elif any(x in domain for x in ["akmfiles.com", "akmfls.xyz"]):
         return akmfiles(link)
     elif any(
@@ -461,8 +240,6 @@ def direct_link_generator(link):
         ]
     ):
         return doods(link)
-    elif any(x in domain for x in ["vide10.com", "vide4.com", "vide9.com"]):
-        return videq(link)
     elif any(
         x in domain
         for x in [
@@ -478,29 +255,6 @@ def direct_link_generator(link):
         return streamtape(link)
     elif any(x in domain for x in ["wetransfer.com", "we.tl"]):
         return wetransfer(link)
-    elif any(
-        x in domain
-        for x in [
-            "terabox.com",
-            "nephobox.com",
-            "4funbox.com",
-            "mirrobox.com",
-            "momerybox.com",
-            "teraboxapp.com",
-            "1024tera.com",
-            "terabox.app",
-            "gibibox.com",
-            "goaibox.com",
-            "terasharelink.com",
-            "teraboxlink.com",
-            "freeterabox.com",
-            "1024terabox.com",
-            "teraboxshare.com",
-            "terafileshare.com",
-            "terabox.club",
-        ]
-    ):
-        return terabox(link)
     elif any(
         x in domain
         for x in [
@@ -521,6 +275,8 @@ def direct_link_generator(link):
         return filelions_and_streamwish(link)
     elif any(x in domain for x in ["streamhub.ink", "streamhub.to"]):
         return streamhub(link)
+    elif any(x in domain for x in ["hubcloud.one", "hubcloud.foo"]):
+        return hubcloud(link)
     elif any(
         x in domain
         for x in [
@@ -578,129 +334,20 @@ def get_captcha_token(session, params):
         return token[0]
 
 
-def transfer_it(url):
-    parsed = urlparse(url)
-    match_obj = match(r"^/t/([A-Za-z0-9_-]+)$", parsed.path.rstrip("/"))
-    if not match_obj:
-        raise DirectDownloadLinkException("ERROR: Invalid Transfer.it link")
-
-    xh = match_obj.group(1)
-    pw = parse_qs(parsed.query).get("pw", [""])[0].strip()
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": user_agent,
-        "Origin": "https://transfer.it",
-        "Referer": "https://transfer.it/",
-    }
-
-    def _call_api(payload, include_transfer=False):
-        params = {"id": str(int(time.time() * 1000))}
-        if include_transfer:
-            params["x"] = xh
-            if pw:
-                params["pw"] = pw
-
-        try:
-            resp = post(
-                "https://bt7.api.mega.co.nz/cs",
-                params=params,
-                json=[payload],
-                headers=headers,
-            )
-        except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: Transfer.it request failed: {e}")
-
-        if resp.status_code != 200:
-            raise DirectDownloadLinkException(
-                f"ERROR: Transfer.it API returned HTTP {resp.status_code}"
-            )
-
-        try:
-            result = resp.json()[0]
-        except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: Invalid response from Transfer.it: {e}"
-            )
-
-        if isinstance(result, int) and result < 0:
-            if result in {-16, -9}:
-                raise DirectDownloadLinkException(
-                    "ERROR: File expired, password is invalid, or file was not found"
-                )
-            raise DirectDownloadLinkException(
-                f"ERROR: Transfer.it API returned error code {result}"
-            )
-        return result
-
-    info = _call_api({"a": "xi", "xh": xh})
-    listing = _call_api({"a": "f", "c": 1, "r": 1}, include_transfer=True)
-    nodes = listing.get("f") or []
-    file_nodes = [node for node in nodes if node.get("t") == 0 and node.get("h")]
-
-    if not file_nodes:
-        raise DirectDownloadLinkException(
-            "ERROR: No downloadable files found on Transfer.it"
-        )
-
-    if len(file_nodes) == 1:
-        target_handle = file_nodes[0]["h"]
-    else:
-        target_handle = info.get("z") or info.get("zp")
-        if not target_handle:
-            raise DirectDownloadLinkException(
-                "ERROR: Transfer.it folder links without a downloadable archive are not supported"
-            )
-
-    result = _call_api(
-        {"a": "g", "n": target_handle, "pt": 1, "g": 1, "ssl": 1},
-        include_transfer=True,
-    )
-    direct_link = result.get("g")
-    if not direct_link or not str(direct_link).startswith("http"):
-        raise DirectDownloadLinkException(
-            "ERROR: Failed to resolve Transfer.it direct link"
-        )
-
-    file_name = ""
-    title_b64 = str(info.get("t") or "").strip()
-    if title_b64:
-        try:
-            file_name = b64decode(title_b64).decode("utf-8", "replace").strip()
-        except Exception:
-            file_name = ""
-
-    if not file_name and len(file_nodes) == 1:
-        file_name = str(file_nodes[0].get("name") or "").strip()
-
-    if not file_name:
-        return direct_link
-
-    safe_name = quote(file_name, safe="")
-    return (
-        direct_link,
-        [f"Content-Disposition: attachment; filename*=UTF-8''{safe_name}"],
-        file_name,
-    )
-
-
 def debrid_link(url):
     cget = create_scraper().request
     resp = cget(
         "POST",
         f"https://debrid-link.com/api/v2/downloader/add?access_token={Config.DEBRID_LINK_API}",
         data={"url": url},
-        proxies=proxies,
     ).json()
-
-    if resp["success"] is not True:
+    if resp["success"] != True:
         raise DirectDownloadLinkException(
             f"ERROR: {resp['error']} & ERROR ID: {resp['error_id']}"
         )
-
     if isinstance(resp["value"], dict):
-        return PROXY_PREFIX + resp["value"]["downloadUrl"]
-
-    if isinstance(resp["value"], list):
+        return resp["value"]["downloadUrl"]
+    elif isinstance(resp["value"], list):
         details = {
             "contents": [],
             "title": unquote(url.rstrip("/").split("/")[-1]),
@@ -709,1175 +356,32 @@ def debrid_link(url):
         for dl in resp["value"]:
             if dl.get("expired", False):
                 continue
-            file_size = safe_int_size(dl.get("size", 0))
             item = {
                 "path": ospath.join(details["title"]),
                 "filename": dl["name"],
-                "url": PROXY_PREFIX + dl["downloadUrl"],
-                "size": file_size,
+                "url": dl["downloadUrl"],
             }
-            details["total_size"] += file_size
+            if "size" in dl:
+                details["total_size"] += dl["size"]
             details["contents"].append(item)
         return details
 
 
-def terabox_sonza(url: str):
-    if "/file/" in url:
-        return url
-
-    api_url = f"https://terabox.sonzaix.xyz/api?key=sonzaix&url={quote(url)}"
-    try:
-        with Session() as session:
-            response = session.get(api_url, timeout=30)
-            resp = _safe_json_response(response, "TeraBox Sonza API")
-    except DirectDownloadLinkException:
-        raise
-    except Exception as err:
-        raise DirectDownloadLinkException(f"ERROR: {err}") from err
-
-    details = {"contents": [], "title": "", "total_size": 0}
-    files = _collect_terabox_entries(resp)
-
-    status_raw = resp.get("status")
-    if status_raw is None:
-        status_raw = resp.get("ok")
-    if status_raw is None:
-        status_raw = resp.get("success")
-
-    if not _is_api_success(status_raw) and not files:
-        message = (
-            resp.get("message")
-            or resp.get("error")
-            or "Terabox API returned failure status"
-        )
-        raise DirectDownloadLinkException(f"ERROR: {message} (status: {status_raw})")
-
-    if not files:
-        raise DirectDownloadLinkException("ERROR: No files returned from API")
-
-    for data in files:
-        if not isinstance(data, dict):
-            continue
-        proxylink = (
-            data.get(f"proxy_download{randint(1, 6)}")
-            or data.get("proxylink")
-            or data.get("directlink")
-            or data.get("dlink")
-            or data.get("url")
-        )
-        proxylink = _rewrite_terabox_premium_url(proxylink)
-        if not proxylink:
-            continue
-        size = safe_int_size(data.get("size"))
-        item = {
-            "path": data.get("path", ""),
-            "filename": data.get("filename") or data.get("name") or "Terabox File",
-            "url": proxylink,
-            "size": size,
-        }
-        details["contents"].append(item)
-        details["total_size"] += size
-    if not details["contents"]:
-        raise DirectDownloadLinkException("ERROR: Failed to parse Terabox API response")
-    details["title"] = files[0].get("filename") or files[0].get("name") or "Terabox"
-    if len(details["contents"]) == 1:
-        return details["contents"][0]["url"]
-    return details
-
-
-def terabox(url, password=None):
-    """TeraBox direct link generator using pilli-beta style API parsing."""
-    if "/file/" in url:
-        return url
-    if "::" in url:
-        password = url.split("::")[-1]
-        url = url.split("::")[0]
-
-    api_url = "https://terascrape.vercel.app/api"
-    params = {"apikey": "pikocak", "url": url}
-    if password:
-        params["password"] = password
-
-    try:
-        response = get(api_url, params=params, timeout=60)
-        req = _safe_json_response(response, "TeraBox API")
-    except Exception:
-        return terabox_scrape(url)
-
-    if not isinstance(req, dict):
-        raise DirectDownloadLinkException("ERROR: Respon API tidak valid.")
-
-    details = {"contents": [], "title": "", "total_size": 0, "source": "terabox"}
-    details["source_url"] = req.get("request_url") or req.get("source_url") or url
-    if password:
-        details["source_password"] = password
-
-    header = ""
-    header_lines = []
-    download_headers = req.get("download_headers")
-    if isinstance(download_headers, dict):
-        for key, value in download_headers.items():
-            key_text = str(key).strip()
-            value_text = str(value).strip() if value is not None else ""
-            if key_text and value_text:
-                header_lines.append(f"{key_text}: {value_text}")
-    elif isinstance(download_headers, (list, tuple, set)):
-        for item in download_headers:
-            line = str(item).strip()
-            if line and ":" in line:
-                header_lines.append(line)
-    elif download_headers:
-        text = str(download_headers).strip()
-        if text:
-            parts = (
-                text.replace("\n", "|").split("|")
-                if "|" in text or "\n" in text
-                else [text]
-            )
-            for part in parts:
-                line = part.strip()
-                if line and ":" in line:
-                    header_lines.append(line)
-    if header_lines:
-        header = "\n".join(header_lines)
-        details["header"] = header
-
-    entries = _collect_terabox_entries(req)
-
-    status_raw = req.get("status")
-    if status_raw is None:
-        status_raw = req.get("ok")
-    if status_raw is None:
-        status_raw = req.get("success")
-
-    if not _is_api_success(status_raw) and not entries:
-        message = req.get("message") or req.get("error") or "Link File tidak ditemukan!"
-        try:
-            return terabox_scrape(url)
-        except Exception as fallback_error:
-            raise DirectDownloadLinkException(
-                f"ERROR: {message} (status: {status_raw}) | fallback: {fallback_error}"
-            )
-    for data in entries:
-        if not isinstance(data, dict):
-            continue
-        direct_url = (
-            data.get("directlink")
-            or data.get("dlink")
-            or data.get("proxylink")
-            or data.get("download_url")
-            or data.get("url")
-        )
-        direct_url = _rewrite_terabox_premium_url(direct_url)
-        if not direct_url:
-            continue
-        filename = data.get("filename") or data.get("name")
-        if not filename:
-            file_path = data.get("path") or ""
-            filename = ospath.basename(file_path) if file_path else "file"
-        item = {
-            "path": data.get("path", ""),
-            "filename": filename,
-            "url": direct_url,
-            "source": "terabox",
-            "source_url": url,
-        }
-        if password:
-            item["source_password"] = password
-        size = data.get("size")
-        if size is not None:
-            try:
-                size_int = int(size)
-            except (TypeError, ValueError):
-                size_int = 0
-            item["size"] = size_int
-            details["total_size"] += size_int
-        details["contents"].append(item)
-
-    if not details["contents"]:
-        try:
-            return terabox_scrape(url)
-        except Exception as fallback_error:
-            raise DirectDownloadLinkException(
-                f"ERROR: Link File tidak ditemukan! | fallback: {fallback_error}"
-            )
-
-    details["title"] = req.get("title") or req.get("extracted_shorturl") or ""
-    if not details["total_size"]:
-        total_size = req.get("total_size")
-        if total_size is not None:
-            try:
-                details["total_size"] = int(total_size)
-            except (TypeError, ValueError):
-                pass
-
-    if len(details["contents"]) == 1:
-        if header:
-            return details["contents"][0]["url"], header
-        return details["contents"][0]["url"]
-    return details
-
-
-def _resolve_terabox_cookie_file():
-    for candidate in (
-        "terabox.txt",
-        "cookies/terabox.txt",
-        "cookies.txt",
-        "pilla/terabox.txt",
-        "pilla/cookies/terabox.txt",
-        "pilla/cookies.txt",
-    ):
-        if ospath.isfile(candidate):
-            return candidate
-    return None
-
-
-def terabox_scrape(url: str):
-    cookie_file = _resolve_terabox_cookie_file()
-    if not cookie_file:
-        raise DirectDownloadLinkException(
-            "ERROR: terabox cookies file not found (tried terabox.txt, cookies/terabox.txt, cookies.txt, pilla/terabox.txt, pilla/cookies/terabox.txt, pilla/cookies.txt)"
-        )
-    try:
-        jar = MozillaCookieJar(cookie_file)
-        jar.load(ignore_discard=True, ignore_expires=True)
-        cookies = {}
-        for cookie in jar:
-            cookies[cookie.name] = cookie.value
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
-
-    def _fetch_link(folder=""):
-        with Session() as ses:
-            try:
-                _res = ses.get(url, cookies=cookies)
-                token_match = search(r'window\.jsToken\s*=\s*"([^"]+)"', _res.text)
-                if not token_match:
-                    token_match = search(r"window\\.jsToken.*?%22(.*?)%22", _res.text)
-                jsToken = token_match.group(1) if token_match else ""
-                if "%" in jsToken:
-                    jsToken = unquote(jsToken)
-
-                parsed_share = urlparse(_res.url)
-                shortUrl = parse_qs(parsed_share.query).get("surl", [""])[0]
-                if not shortUrl:
-                    path_parts = [part for part in parsed_share.path.split("/") if part]
-                    if path_parts:
-                        shortUrl = path_parts[-1]
-
-                params = {
-                    "app_id": "250528",
-                    "jsToken": jsToken,
-                    "shorturl": shortUrl,
-                }
-                if folder:
-                    params["dir"] = folder
-                else:
-                    params["root"] = "1"
-                list_response = ses.get(
-                    "https://terabox.app/share/list", params=params, cookies=cookies
-                )
-                data = _safe_json_response(list_response, "TeraBox share/list API")
-            except DirectDownloadLinkException:
-                raise
-            except Exception as e:
-                raise DirectDownloadLinkException(
-                    f"ERROR: {e.__class__.__name__} saat mengambil data dari TeraBox"
-                )
-
-        if data.get("errno") in [0, "0"] and data.get("list"):
-            for file in data.get("list", []):
-                if not details["title"]:
-                    if "title" in data and data["title"]:
-                        details["title"] = data["title"].split("/")[-1]
-                    else:
-                        details["title"] = shortUrl
-                if file["isdir"] in [1, "1"]:
-                    _fetch_link(folder=file["path"])
-                else:
-                    filepaths = file["path"].split("/")
-                    item = {
-                        "path": "/".join(filepaths[:-1]),
-                        "filename": filepaths[-1],
-                        "url": _rewrite_terabox_premium_url(file["dlink"]),
-                    }
-                    details["contents"].append(item)
-                    details["total_size"] += int(file["size"])
-
-        else:
-            raise DirectDownloadLinkException("ERROR: Link File tidak ditemukan!")
-
-    details = {"contents": [], "title": f"", "total_size": 0}
-    cookie_value = "; ".join(
-        f"{key}={value}" for key, value in cookies.items() if key and value is not None
-    )
-    header_lines = []
-    if cookie_value:
-        header_lines.append(f"Cookie: {cookie_value}")
-    header_lines.append(f"User-Agent: {user_agent}")
-    header_lines.append("Referer: https://www.terabox.com/")
-    details["header"] = "\n".join(header_lines)
-    try:
-        _fetch_link()
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {e}")
-    return details
-
-
-GDFLIX_DOMAINN = "https://new10.gdflix.dad"
-
-
-def gdflix(url):
-    """
-    Fetches downloadable links from a GDFlix page.
-    Returns direct download links in the same format as gofile:
-    - Single file: (url, headers) or url string
-    - Pack/folder: {"contents": [...], "title": "...", "total_size": 0}
-    Uses proxy from get_hubcloud_proxy().
-    """
-    from bs4 import BeautifulSoup
-    import re
-
-    try:
-        from curl_cffi import requests as c_requests
-    except ImportError:
-        raise DirectDownloadLinkException("curl_cffi not installed!")
-
-    def _wrap(link):
-        return (link, {"User-Agent": user_agent})
-
-    code = url.split("/")[-1] if not url.endswith("/") else url.split("/")[-2]
-
-    # Parse the original URL to get domain
-    parsed_url = urlparse(url)
-    original_domain = parsed_url.netloc
-    scheme = parsed_url.scheme or "https"
-
-    # Only reconstruct URL if it's not already a proper file/pack URL
-    if "/file/" not in url and "/pack/" not in url:
-        # Use original domain if it's a gdflix domain, otherwise use default
-        if any(x in original_domain for x in ["gdflix", "gdlink", "vifix"]):
-            url = f"{scheme}://{original_domain}/file/{code}"
-        else:
-            url = f"{GDFLIX_DOMAINN}/file/{code}"
-    # If URL already has /file/ or /pack/, use it as-is
-
-    # Setup client
-    client = c_requests.Session()
-    client.headers.update(
-        {
-            "User-Agent": user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
-    )
-
-    parsed = urlparse(url)
-    if "gdlink" in parsed.netloc:
-        res = client.get(url, verify=False, impersonate="chrome110")
-        soup = BeautifulSoup(res.text, "html.parser")
-        gdflix_btn = soup.find("a", href=lambda x: x and "gdflix" in x)
-        if gdflix_btn:
-            new_url = gdflix_btn["href"]
-            if new_url.endswith(".net") or new_url.endswith(".dad"):
-                new_url = f"{new_url}/file/{url.split('/')[-1]}"
-            return gdflix(new_url)
-        if "/c/s/" in res.url:
-            url = "https://" + res.url.split("/c/s/")[-1]
-        else:
-            url = res.url
-
-    try:
-        res = client.get(url, timeout=30, verify=False, impersonate="chrome110")
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: Request failed: {e}")
-
-    url = res.url
-    domain = urlparse(url).netloc
-    dcode = url.split("/")[-1]
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    # Handle pack/folder URLs
-    if "/pack/" in url:
-        title_tag = soup.find("h3")
-        title = title_tag.text if title_tag else f"GDFlix_Pack_{code}"
-        details = {"contents": [], "title": title, "total_size": 0}
-
-        all_links = soup.select('a[href^="/file/"]')
-        for link in all_links:
-            temp_url = f"https://{domain}{link['href']}"
-            try:
-                # Fetch the individual file page to get size
-                file_res = client.get(temp_url, timeout=30)
-                file_soup = BeautifulSoup(file_res.text, "html.parser")
-
-                # Extract filename and size from file page
-                name_elem = file_soup.find(
-                    "li",
-                    class_="list-group-item",
-                    string=lambda text: text and "Name :" in text,
-                )
-                file_name = (
-                    name_elem.text.split("Name : ")[-1]
-                    if name_elem
-                    else link.get_text(strip=True)
-                    or f"File_{len(details['contents']) + 1}"
-                )
-
-                size_elem = file_soup.find(
-                    "li",
-                    class_="list-group-item",
-                    string=lambda text: text and "Size :" in text,
-                )
-                size_str = size_elem.text.split("Size : ")[-1] if size_elem else "0"
-
-                # Parse size string to bytes (e.g., "1.5 GB" -> bytes)
-                file_size = 0
-                try:
-                    size_str = size_str.strip().upper()
-                    if "GB" in size_str:
-                        file_size = int(
-                            float(size_str.replace("GB", "").strip())
-                            * 1024
-                            * 1024
-                            * 1024
-                        )
-                    elif "MB" in size_str:
-                        file_size = int(
-                            float(size_str.replace("MB", "").strip()) * 1024 * 1024
-                        )
-                    elif "KB" in size_str:
-                        file_size = int(
-                            float(size_str.replace("KB", "").strip()) * 1024
-                        )
-                    elif "B" in size_str:
-                        file_size = int(float(size_str.replace("B", "").strip()))
-                except (ValueError, TypeError):
-                    file_size = 0
-
-                # Get direct download link using recursive call
-                result = gdflix(temp_url)
-                dl_url = None
-
-                if isinstance(result, tuple):
-                    dl_url = result[0]
-                elif isinstance(result, str):
-                    dl_url = result
-                elif isinstance(result, dict):
-                    # Nested pack
-                    nested_contents = result.get("contents", [])
-                    if nested_contents:
-                        details["contents"].extend(nested_contents)
-                        details["total_size"] += result.get("total_size", 0)
-                    continue
-
-                if dl_url:
-                    details["contents"].append(
-                        {
-                            "path": "",
-                            "filename": file_name,
-                            "url": dl_url,
-                        }
-                    )
-                    details["total_size"] += file_size
-
-            except Exception:
-                continue
-
-        if not details["contents"]:
-            raise DirectDownloadLinkException("ERROR: No download links found in pack")
-        return details
-
-    # Single file handling - extract title and size - try multiple methods
-    title = None
-
-    # Method 1: Look for list-group-item with Name
-    title_elem = soup.find(
-        "li", class_="list-group-item", string=lambda text: text and "Name :" in text
-    )
-    if title_elem:
-        title = title_elem.text.split("Name : ")[-1]
-
-    # Method 2: Try h2 tag
-    if not title:
-        h2_tag = soup.find("h2")
-        if h2_tag:
-            h2_text = h2_tag.get_text(strip=True)
-            if "File Size" in h2_text:
-                title = h2_text.split("File Size")[0].strip()
-            else:
-                title = h2_text.strip()
-
-    # Method 3: Try h3 tag
-    if not title:
-        h3_tag = soup.find("h3")
-        if h3_tag:
-            title = h3_tag.get_text(strip=True)
-
-    # Method 4: Fallback to code
-    if not title:
-        title = f"GDFlix_File_{code}"
-
-    size_elem = soup.find(
-        "li", class_="list-group-item", string=lambda text: text and "Size :" in text
-    )
-    size = size_elem.text.split("Size : ")[-1] if size_elem else "Unknown"
-
-    # Priority order for download links
-    # 1. Cloud Download (.dev links)
-    cloud_dl = soup.find(
-        lambda tag: (
-            tag.name == "a"
-            and "cloud download" in tag.get_text(strip=True).lower()
-            and ".dev" in tag.get("href", "")
-        )
-    )
-    if cloud_dl:
-        href = cloud_dl["href"]
-        if "/?url=" in href:
-            dl_link = href.split("/?url=", maxsplit=1)[1]
-            if dl_link.startswith("https%3A"):
-                dl_link = unquote(dl_link)
-            return _wrap(dl_link)
-        return _wrap(href)
-
-    # 2. Fast Cloud Download (xfile/zfile pages need POST request)
-    fast_dl = soup.find(
-        lambda tag: (
-            tag.name == "a"
-            and "fast cloud" in tag.get_text(strip=True).lower()
-            and ("xfile" in tag.get("href", "") or "zfile" in tag.get("href", ""))
-        )
-    )
-    if fast_dl:
-        try:
-            zfile_url = f"https://{domain}" + fast_dl["href"]
-            res3 = client.get(
-                zfile_url, timeout=30, verify=False, impersonate="chrome110"
-            )
-
-            # zfile/xfile pages need POST request to get actual download link
-            soup3 = BeautifulSoup(res3.text, "html.parser")
-
-            # Check if page has post-based download (new1.gdflix.app style)
-            if re.search(r"async function generate", res3.text):
-                # Extract the key from JavaScript
-                key_match = re.search(
-                    r'formData\.append\("key",\s*"([^"]+)"\)', res3.text
-                )
-                key = key_match.group(1) if key_match else ""
-
-                # Make POST request to get download link
-                post_data = {"action": "cloud", "key": key, "action_token": ""}
-                post_headers = {"x-token": domain}
-                post_res = client.post(
-                    res3.url,
-                    data=post_data,
-                    headers=post_headers,
-                    timeout=30,
-                    verify=False,
-                    impersonate="chrome110",
-                )
-
-                if post_res.status_code == 200:
-                    try:
-                        json_data = loads(post_res.text)
-                        download_url = json_data.get("visit_url") or json_data.get(
-                            "url"
-                        )
-                        if download_url:
-                            # Convert relative URL to absolute
-                            if not download_url.startswith("http"):
-                                download_url = f"https://{domain}{download_url}"
-
-                            # If URL is another zfile/xfile token URL, follow it recursively
-                            if "/zfile/" in download_url or "/xfile/" in download_url:
-                                try:
-                                    token_res = client.get(
-                                        download_url,
-                                        timeout=30,
-                                        verify=False,
-                                        impersonate="chrome110",
-                                    )
-                                    token_soup = BeautifulSoup(
-                                        token_res.text, "html.parser"
-                                    )
-
-                                    # Check if token page also needs POST request
-                                    if re.search(
-                                        r"async function generate", token_res.text
-                                    ):
-                                        key_match2 = re.search(
-                                            r'formData\.append\("key",\s*"([^"]+)"\)',
-                                            token_res.text,
-                                        )
-                                        key2 = key_match2.group(1) if key_match2 else ""
-
-                                        post_data2 = {
-                                            "action": "cloud",
-                                            "key": key2,
-                                            "action_token": "",
-                                        }
-                                        post_headers2 = {"x-token": domain}
-                                        post_res2 = client.post(
-                                            token_res.url,
-                                            data=post_data2,
-                                            headers=post_headers2,
-                                            timeout=30,
-                                            verify=False,
-                                            impersonate="chrome110",
-                                        )
-
-                                        if post_res2.status_code == 200:
-                                            try:
-                                                json_data2 = loads(post_res2.text)
-                                                final_url = json_data2.get(
-                                                    "visit_url"
-                                                ) or json_data2.get("url")
-                                                if final_url:
-                                                    if not final_url.startswith("http"):
-                                                        final_url = f"https://{domain}{final_url}"
-                                                    return final_url
-                                            except Exception:
-                                                pass
-
-                                    # Look for actual download links (Google Drive, GoFile, etc.)
-                                    for a in token_soup.find_all("a", href=True):
-                                        href = a.get("href", "")
-                                        if any(
-                                            x in href
-                                            for x in [
-                                                "drive.google.com",
-                                                "googleapis.com",
-                                                "gofile.io",
-                                                "1fichier.com",
-                                                "pixeldrain",
-                                                "mega.nz",
-                                                "workers.dev",
-                                            ]
-                                        ):
-                                            return _wrap(href)
-                                except Exception:
-                                    pass
-
-                            # Don't return download_url here - might be HTML page
-                            # Let it fall through to wfile endpoint
-                    except Exception:
-                        pass
-
-        except Exception:
-            pass
-
-    # 3. Instant DL (CDN)
-    instant_dl = soup.find(
-        lambda tag: (
-            tag.name == "a"
-            and "instant dl" in tag.get_text(strip=True).lower()
-            and "cdn" in tag.get("href", "")
-        )
-    )
-    if instant_dl:
-        try:
-            res4 = client.get(instant_dl["href"], timeout=30)
-            final_url = res4.url.split("?url=")[-1]
-            if final_url.startswith("http"):
-                return _wrap(final_url)
-            # Try to extract from page
-            ddd = urlparse(res4.url).netloc
-            match1 = re.search(r'href\s?=\s?"([^\"]+)"', res4.text)
-            if match1:
-                res6 = client.get("https://" + ddd + match1.group(1), timeout=30)
-                soup6 = BeautifulSoup(res6.text, "html.parser")
-                ff = soup6.select_one(
-                    'a[href^="https://video-downloads.googleusercontent.com"]'
-                )
-                if ff:
-                    return _wrap(ff["href"])
-        except Exception:
-            pass
-
-    # 3.5. GoFlix intermediate page - fetch to extract actual download link
-    goflix = soup.find(
-        lambda tag: tag.name == "a" and "goflix.sbs" in tag.get("href", "")
-    )
-    if goflix and goflix.get("href"):
-        try:
-            goflix_res = client.get(
-                goflix["href"], timeout=30, verify=False, impersonate="chrome110"
-            )
-            if goflix_res.status_code == 200:
-                goflix_soup = BeautifulSoup(goflix_res.text, "html.parser")
-
-                # First try to extract gofile.io link
-                for a in goflix_soup.find_all("a", href=True):
-                    href = a.get("href", "")
-                    if "gofile.io" in href:
-                        return _wrap(href)
-
-                # Fallback to other hosts
-                for a in goflix_soup.find_all("a", href=True):
-                    href = a.get("href", "")
-                    if any(h in href for h in ["1fichier.com", "pixeldrain"]):
-                        return _wrap(href)
-        except Exception:
-            pass
-
-    # 4. GoFile
-    go_ = soup.find(
-        lambda tag: tag.name == "a" and "gofile" in tag.get_text(strip=True).lower()
-    )
-    if go_ and go_.get("href") and "multiup.php" not in go_["href"]:
-        try:
-            res2 = client.get(go_["href"], timeout=30)
-            match = re.search(r"https://gofile\.io/d/\w+", res2.text)
-            if match:
-                return _wrap(match.group())
-        except Exception:
-            pass
-
-    # 5. PixelDrain
-    pixeldrain = soup.find(
-        lambda tag: tag.name == "a" and "pixeldrain" in tag.get_text(strip=True).lower()
-    )
-    if pixeldrain and pixeldrain.get("href"):
-        return _wrap(pixeldrain["href"])
-
-    # 6. MGT Server
-    mgt_server = soup.find(
-        lambda tag: tag.name == "a" and "mgt" in tag.get_text(strip=True).lower()
-    )
-    if mgt_server and mgt_server.get("href"):
-        return _wrap(mgt_server["href"])
-
-    # 7. Try wfile endpoint
-    try:
-        lnks = f"https://{domain}/wfile/{dcode}"
-        res5 = client.get(lnks, timeout=30)
-        soup4 = BeautifulSoup(res5.text, "html.parser")
-        d_j = soup4.find_all(
-            lambda tag: (
-                tag.name == "a"
-                and "download" in tag.get_text(strip=True).lower()
-                and ".dev" in tag.get("href", "")
-            )
-        )
-        for i in d_j:
-            if i.get("href"):
-                return _wrap(i["href"])
-    except Exception:
-        pass
-
-    raise DirectDownloadLinkException("ERROR: No valid download links found")
-
-
-def get_hubcloud_proxy():
-    """
-    Returns proxy configuration for Hubcloud and Gdflix downloads.
-    """
-    from bot.modules.proxy import get_default_proxy, get_translate_proxy
-
-    proxy_url = get_translate_proxy() or get_default_proxy()
-    return {"http": proxy_url, "https": proxy_url} if proxy_url else {}
-
-
-def get_random_proxy():
-    """
-    Returns proxy host, port, username, password for hubcloud/gdflix.
-    Uses smart sticky proxy from proxy.py.
-    """
-    from bot.modules.proxy import get_default_proxy, get_translate_proxy
-
-    proxy_url = get_translate_proxy() or get_default_proxy()
-
-    if not proxy_url:
-        return "", 0, "", ""  # Direct connection
-
-    try:
-        parsed = urlparse(proxy_url)
-        host = parsed.hostname or ""
-        port = parsed.port or 0
-        username = unquote(parsed.username or "")
-        password = unquote(parsed.password or "")
-        if not host or not port:
-            return "", 0, "", ""
-        return host, int(port), username, password
-    except Exception:
-        return "", 0, "", ""
-
-
-def get_cf_clearance(domain, prox_):
-    """
-    Returns cookies and headers for Cloudflare bypass.
-    Uses cloudscraper to get cf_clearance cookie.
-    """
-    import cloudscraper
-
-    scraper = cloudscraper.create_scraper(
-        browser={"browser": "chrome", "platform": "windows", "desktop": True}
-    )
-
-    # Only apply proxy if it is valid; otherwise use direct connection.
-    try:
-        host = (prox_ or {}).get("host")
-        port = int((prox_ or {}).get("port") or 0)
-        username = (prox_ or {}).get("username") or ""
-        password = (prox_ or {}).get("password") or ""
-    except Exception:
-        host, port, username, password = "", 0, "", ""
-
-    if host and port > 0:
-        if username and password:
-            proxy_url = f"http://{username}:{password}@{host}:{port}"
-        else:
-            proxy_url = f"http://{host}:{port}"
-        scraper.proxies.update({"http": proxy_url, "https": proxy_url})
-
-    try:
-        scraper.get(f"https://{domain}/", timeout=30)
-        cookies = dict(scraper.cookies)
-        headers = {
-            "User-Agent": scraper.headers.get("User-Agent", user_agent),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        return cookies, headers
-    except Exception:
-        headers = {
-            "User-Agent": user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "DNT": "1",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
-        return {}, headers
-
-
-HUBCLOUD_DOMAIN = "https://hubcloud.foo"
-
-
 def hubcloud(url):
-    """
-    Fetches direct download links from HubCloud domains.
-    """
-    # Quick API Bypass Fallback from v1
     try:
-        from requests import get as r_get
-        api_response = r_get(f"http://hubcloud.cfd/bypass?url={url}", timeout=10).json()
-        if "links" in api_response and api_response["links"]:
-            links = sorted(api_response["links"], key=lambda x: x.get("priority", 0), reverse=True)
-            return links[0]["url"]
-    except Exception:
-        pass # Fall back to v2's curl_cffi scraping if API fails
-
-    from bs4 import BeautifulSoup
-    import re
-
-    try:
-        from curl_cffi import requests as c_requests
-    except ImportError:
-        raise DirectDownloadLinkException("curl_cffi not installed!")
-
-    code = url.split("/")[-1] if not url.endswith("/") else url.split("/")[-2]
-
-    # Determine URL type and normalize
-    if "/drive/packs/" in url:
-        url = f"{HUBCLOUD_DOMAIN}/drive/packs/{code}"
-    elif "/video/packs/" in url:
-        url = f"{HUBCLOUD_DOMAIN}/video/packs/{code}"
-    elif "/drive/" in url or "vifix" in url:
-        url = f"{HUBCLOUD_DOMAIN}/drive/{code}"
-    elif "/video/" in url:
-        url = f"{HUBCLOUD_DOMAIN}/video/{code}"
-
-    # Setup client with proxy (only if proxy is configured)
-    host, port, username, password = get_random_proxy()
-    client = c_requests.Session()
-
-    if host and int(port or 0) > 0:
-        if username and password:
-            proxy_url = f"http://{username}:{password}@{host}:{port}"
-        else:
-            proxy_url = f"http://{host}:{port}"
-        client.proxies.update({"http": proxy_url, "https": proxy_url})
-
-    try:
-        res = client.get(url, timeout=30, verify=False, impersonate="chrome110")
+        response = get(f"http://hubcloud.cfd/bypass?url={url}").json()
     except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: Request failed: {e}")
+        raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
 
-    domain = urlparse(res.url).netloc
-    soup = BeautifulSoup(res.text, "html.parser")
+    if "links" not in response or not response["links"]:
+        raise DirectDownloadLinkException("ERROR: No links found")
 
-    # Handle packs (folder downloads)
-    if "/packs/" in url:
-        file_type_match = re.search(r"window\.open\(\s*['\"]([^'\"]+)['\"]", res.text)
-        if not file_type_match:
-            raise DirectDownloadLinkException(
-                "ERROR: Could not determine pack file type"
-            )
+    links = sorted(response["links"], key=lambda x: x.get("priority", 0), reverse=True)
 
-        file_type_segment = re.search(
-            r"(?:^|/)(drive|video)(?:/|$)", file_type_match.group(1)
-        )
-        if not file_type_segment:
-            raise DirectDownloadLinkException("ERROR: Invalid pack file type path")
-
-        pack_file_type = file_type_segment.group(1)
-        json_match = re.search(
-            r"const\s+packData\s*=\s*JSON\.parse\(`({.+?})`\);", res.text, re.DOTALL
-        )
-        if not json_match:
-            raise DirectDownloadLinkException("ERROR: Could not parse pack data")
-
-        pack_info = loads(json_match.group(1))
-        title = pack_info["pack"]["pack_name"]
-
-        details = {
-            "title": title,
-            "total_size": 0,
-            "contents": [],
-            "header": f"Referer: {HUBCLOUD_DOMAIN}/",
-        }
-
-        # Extract files with their sizes and names from pack data
-        files_data = pack_info.get("files", [])
-
-        for item in files_data:
-            share_id = item.get("share_id")
-            file_name = item.get("file_name", f"File_{share_id}")
-            file_size = item.get("file_size", 0)
-
-            if not share_id:
-                continue
-
-            link = f"https://{domain}/{pack_file_type}/{share_id}"
-
-            try:
-                result = hubcloud(link)
-                dl_url = None
-
-                if isinstance(result, str):
-                    dl_url = result
-                elif isinstance(result, tuple):
-                    dl_url = result[0]
-                elif isinstance(result, dict):
-                    # Nested pack - extend contents
-                    nested_contents = result.get("contents", [])
-                    if nested_contents:
-                        details["contents"].extend(nested_contents)
-                        details["total_size"] += result.get("total_size", 0)
-                    continue
-
-                if dl_url:
-                    details["contents"].append(
-                        {
-                            "path": "",
-                            "filename": file_name,
-                            "url": dl_url,
-                        }
-                    )
-
-                    # Add file size to total
-                    try:
-                        details["total_size"] += int(file_size)
-                    except (ValueError, TypeError):
-                        pass
-
-            except Exception:
-                continue
-
-        if not details["contents"]:
-            raise DirectDownloadLinkException("ERROR: No download links found in pack")
-        return details
-
-    # Single file handling
-    card_header = soup.find("div", class_="card-header")
-    title = card_header.text.strip() if card_header else f"HubCloud_File_{code}"
-
-    size_elem = soup.find("i", id="size")
-    size = size_elem.text.strip() if size_elem else "Unknown"
-
-    # Find the token link (HubCloud HTML changes frequently, so use multiple fallbacks)
-    anchor_href = ""
-
-    anchor = soup.find("a", href=lambda x: x and "token" in x.lower())
-    if anchor and anchor.get("href"):
-        anchor_href = anchor["href"]
-
-    if not anchor_href:
-        anchor = soup.find("a", id="download", attrs={"x-href": True})
-        if anchor:
-            try:
-                anchor["href"] = decode64(anchor["x-href"])
-                anchor_href = anchor["href"]
-            except (ValueError, TypeError, UnicodeDecodeError):
-                pass
-
-    if not anchor_href:
-        # Try to pull a token URL from raw HTML/JS
-        candidates = []
-        patterns = [
-            r'href\s*=\s*["\"]([^"\"]*(?:\?|&)token[^"\"]*)["\"]',
-            r'href\s*=\s*["\"]([^"\"]*/token/[^"\"]*)["\"]',
-            r'(https?://[^\s"\']*(?:\?|&)token=[^\s"\']+)',
-            r'(https?://[^\s"\']*/token/[^\s"\']+)',
-        ]
-        for pat in patterns:
-            try:
-                for m in re.findall(pat, res.text, flags=re.IGNORECASE):
-                    if not m:
-                        continue
-                    # Avoid common non-download tokens
-                    low = m.lower()
-                    if "csrf" in low or "turnstile" in low or "recaptcha" in low:
-                        continue
-                    candidates.append(m)
-            except Exception:
-                continue
-
-        # Prefer URLs that look like real navigation links
-        for cand in candidates:
-            if "token=" in cand.lower() or "/token/" in cand.lower():
-                anchor_href = cand
-                break
-
-    if not anchor_href:
-        low_html = (res.text or "").lower()
-        if any(
-            k in low_html
-            for k in ["just a moment", "cloudflare", "cf-chl", "cf-turnstile"]
-        ):
-            raise DirectDownloadLinkException(
-                "ERROR: HubCloud blocked/anti-bot page (no token link). Try enabling/using proxy and retry."
-            )
-        raise DirectDownloadLinkException("ERROR: No token link found")
-
-    if not anchor_href.startswith("http"):
-        anchor_href = f"https://{domain}" + anchor_href
-
-    try:
-        res1 = client.get(
-            anchor_href, timeout=30, verify=False, impersonate="chrome110"
-        )
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: Failed to get download page: {e}")
-
-    soup1 = BeautifulSoup(res1.text, "html.parser")
-    anchors = soup1.find_all("a")
-
-    dl_links = {}
-    for i in anchors:
-        if not (i.get("href") or i.get("id") == "mega"):
-            continue
-
-        href = i.get("href", "")
-        link_domain = urlparse(href).netloc
-        text = i.get_text(strip=True)
-
-        if "pixeldrain" in link_domain:
-            dl_links["Pixeldrain"] = href
-        elif "bzzhr.co" in link_domain:
-            dl_links["BuzzServer"] = href
-        elif "FSL Server" in text:
-            dl_links["FSL Server"] = href
-        elif "FSLv2 Server" in text:
-            dl_links["FSLv2 Server"] = href
-        elif "Download File" in text:
-            dl_links["DL Server"] = href
-        elif "ZipDisk" in text:
-            dl_links["ZipDisk Server"] = href
-        elif "Mega Server" in text:
-            dl_links["Mega Server"] = href
-        elif "TRS Server" in text:
-            script = i.find_next("script")
-            if script and script.string:
-                location = re.search(
-                    r"window\.location\.href\s*=\s*'([^']+)'", script.string
-                )
-                if location:
-                    try:
-                        tresp = client.get(
-                            location.group(1),
-                            allow_redirects=False,
-                            timeout=10,
-                            verify=False,
-                            impersonate="chrome110",
-                        )
-                        loc = tresp.headers.get("Location", "")
-                        if loc:
-                            dl_links["TRS Server"] = loc
-                    except Exception:
-                        pass
-        elif "10Gbps" in text:
-            if "storage.googleapis.com/" in href:
-                dl_links["10Gbps Server"] = href
-                continue
-            try:
-                res1 = client.get(
-                    href,
-                    allow_redirects=False,
-                    timeout=10,
-                    verify=False,
-                    impersonate="chrome110",
-                )
-                location = res1.headers.get("Location", "")
-                if location.startswith("https://video-downloads"):
-                    dl_links["10Gbps Server"] = location
-                    continue
-                if "?link=https://video-downloads" in location:
-                    dl_links["10Gbps Server"] = location.split("?link=")[-1]
-                    continue
-                if location:
-                    res111 = client.get(
-                        location,
-                        allow_redirects=False,
-                        timeout=10,
-                        verify=False,
-                        impersonate="chrome110",
-                    )
-                    location = res111.headers.get("Location")
-                    if location:
-                        dl_links["10Gbps Server"] = location.split("?link=")[-1]
-            except Exception:
-                pass
-
-    if not dl_links:
-        raise DirectDownloadLinkException("ERROR: No download links found")
-
-    # Priority order for returning links
-    priority = [
-        "10Gbps Server",
-        "FSL Server",
-        "FSLv2 Server",
-        "DL Server",
-        "BuzzServer",
-        "Pixeldrain",
-        "ZipDisk Server",
-        "Mega Server",
-        "TRS Server",
-    ]
-
-    for server in priority:
-        if server in dl_links:
-            return dl_links[server]
-
-    # Return first available link
-    return next(iter(dl_links.values()))
+    return links[0]["url"]
 
 
 def buzzheavier(link):
-    """
-    Generate a direct download link for buzzheavier URLs.
-    @param link: URL from buzzheavier
-    @return: Direct download link
-    """
     link = link if link.endswith("/") else link + "/"
     client = create_scraper()
     try:
@@ -1898,16 +402,7 @@ def buzzheavier(link):
     return redirect_url
 
 
-def zlib(url):
-    return f"https://zlib.fasto.workers.dev/?url={url}"
-
-
 def fuckingfast_dl(url):
-    """
-    Generate a direct download link for fuckingfast.co URLs.
-    @param url: URL from fuckingfast.co
-    @return: Direct download link
-    """
     session = Session()
     url = url.strip()
 
@@ -1931,253 +426,56 @@ def fuckingfast_dl(url):
         session.close()
 
 
-def apkadmin(url: str) -> str:
-    with create_scraper() as session:
-        try:
-            req = session.get(url).text
-            soup = B(req, "lxml")
-            op = soup.find("input", {"name": "op"})["value"]
-            ids = soup.find("input", {"name": "id"})["value"]
-            post = session.post(
-                url,
-                data={
-                    "op": op,
-                    "id": ids,
-                    "rand": " ",
-                    "referer": " ",
-                    "method_free": " ",
-                    "method_premium": " ",
-                },
-            ).text
-            soup = B(post, "lxml")
-            link = soup.find("div", {"class": "text text-center"})
-            direct_link = link.find("a")["href"]
-            return direct_link
-        except:
-            session.close()
-            raise DirectDownloadLinkException(f"ERROR: Link File tidak ditemukan!")
-
-
 def devuploads(url):
-    """
-    Generate a direct download link for devuploads.com URLs.
-    @param url: URL from devuploads.com
-    @return: Direct download link
-    """
-    try:
-        params = {
-            "apikey": "sikocak",
-            "url": url,
-        }
-        with Session() as session:
-            try:
-                data = session.get(
-                    "https://scraper.pika.web.id/devuploads", params=params
-                ).json()
-            except Exception as e:
-                raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
-
-        details = {"contents": [], "title": f"", "total_size": 0}
-        if data["status"] == "success":
-            file_size = int(data["bytes"])
-            item = {
-                "path": "",
-                "filename": data["filename"],
-                "url": data["proxylink"],
-                "size": file_size,
-            }
-            details["contents"].append(item)
-            details["total_size"] += file_size
-            details["title"] = data["filename"]
-        else:
-            raise DirectDownloadLinkException(f"ERROR: {data['message']}")
-        return details
-    except Exception:
-        pattern = r"^https?://devuploads\.com/.*"
-        if not match(pattern, url):
-            raise DirectDownloadLinkException(
-                "ERROR: Invalid URL, use link format <code>https://devuploads.com/xxxxxxxx</code>"
-            )
-
-        import os as _os
-        proxy_env = (_os.environ.get("GUJJU_PROXY_URL") or "").strip()
-        if proxy_env:
-            proxies = {"http": proxy_env, "https": proxy_env}
-        else:
-            proxies = get_hubcloud_proxy()
-
-        with Session() as session:
-            res = session.get(url)
-            html = HTML(res.text)
-            if not html.xpath("//input[@name]"):
-                raise DirectDownloadLinkException("ERROR: Unable to find link data")
-
-            title = html.xpath("//title/text()")[0]
-
-            data = {i.get("name"): i.get("value") for i in html.xpath("//input[@name]")}
-            resp = session.get(
-                "https://du2.devuploads.com/dlhash.php",
-                headers={
-                    "Origin": "https://gujjukhabar.in",
-                    "Referer": "https://gujjukhabar.in/",
-                },
-            )
-            if not resp.text:
-                raise DirectDownloadLinkException("ERROR: Unable to find ipp value")
-            data["ipp"] = resp.text.strip()
-            if not data.get("rand"):
-                raise DirectDownloadLinkException("ERROR: Unable to find rand value")
-            randpost = session.post(
-                "https://devuploads.com/token/token.php",
-                data={"rand": data["rand"], "msg": ""},
-                headers={
-                    "Origin": "https://gujjukhabar.in",
-                    "Referer": "https://gujjukhabar.in/",
-                },
-            )
-            if not randpost:
-                raise DirectDownloadLinkException("ERROR: Unable to find xd value")
-            data["xd"] = randpost.text.strip()
-            res = session.post(url, data=data, proxies=proxies)
-            html = HTML(res.text)
-            if not html.xpath("//input[@name='orilink']/@value"):
-                raise DirectDownloadLinkException("ERROR: Unable to find Direct Link")
-            direct_link = html.xpath("//input[@name='orilink']/@value")[0]
-
-            with session.head(direct_link, allow_redirects=True) as head_res:
-                size = head_res.headers.get("content-length")
-                if size:
-                    size = int(size)
-
-                filename = title
-                if "content-disposition" in head_res.headers:
-                    cd = head_res.headers.get("content-disposition")
-                    if "filename=" in cd:
-                        filename = cd.split("filename=")[-1].strip('"')
-
-            details = {"contents": [], "title": filename, "total_size": size or 0}
-            item = {
-                "path": "",
-                "filename": filename,
-                "url": direct_link,
-                "size": size or 0,
-            }
-            details["contents"].append(item)
-            return details
-
-
-def sharemods(url: str) -> str:
-    """Resolve sharemods links using standard form submission."""
-
-    with create_scraper() as session:
-        try:
-            page = session.get(url).text
-            tree = HTML(page)
-            op = tree.xpath('//input[@name="op"]/@value')
-            ids = tree.xpath('//input[@name="id"]/@value')
-            if not op or not ids:
-                raise DirectDownloadLinkException(
-                    "ERROR: Unable to parse ShareMods form"
-                )
-            payload = {
-                "op": op[0],
-                "id": ids[0],
-                "rand": " ",
-                "referer": " ",
-                "method_free": " ",
-                "method_premium": " ",
-            }
-            post_page = session.post(url, data=payload).text
-            link = HTML(post_page).xpath('//a[@id="downloadbtn"]/@href')
-            if not link:
-                raise DirectDownloadLinkException(
-                    "ERROR: ShareMods download link not found"
-                )
-            return link[0]
-        except DirectDownloadLinkException:
-            raise
-        except Exception as err:
-            raise DirectDownloadLinkException(f"ERROR: {err}") from err
-
-
-def sourceforge(url: str) -> str:
-    with Session() as session:
-        try:
-            if "master.dl.sourceforge.net" in url:
-                return f"{url}?viasf=1"
-            if url.endswith("/download"):
-                url = url.rsplit("/download", 1)[0]
-            matches = findall(r"\bhttps?://sourceforge\.net\S+", url)
-            if not matches:
-                raise DirectDownloadLinkException("ERROR: SourceForge link not found")
-            link = matches[0]
-            file_id = findall(r"files(.*)", link)[0]
-            project = findall(r"projects?/(.*?)/files", link)[0]
-            response = session.get(
-                "https://sourceforge.net/settings/mirror_choices",
-                params={
-                    "projectname": project,
-                    "filename": file_id,
-                },
-                timeout=30,
-            ).content
-            soup = B(response, "html.parser")
-            mirror_list = soup.find("ul", {"id": "mirrorList"})
-            if not mirror_list:
-                raise DirectDownloadLinkException("ERROR: Unable to fetch mirror list")
-            mirrors = [
-                item["id"] for item in mirror_list.findAll("li") if item.get("id")
-            ]
-            if not mirrors:
-                raise DirectDownloadLinkException("ERROR: No mirrors available")
-            preferred = "ixpeering" if "ixpeering" in mirrors else None
-            if "autoselect" in mirrors:
-                mirrors.remove("autoselect")
-            chosen = preferred or choice(mirrors)
-            return f"https://{chosen}.dl.sourceforge.net/project/{project}/{file_id}?viasf=1"
-        except DirectDownloadLinkException:
-            raise
-        except Exception as err:
-            raise DirectDownloadLinkException(f"ERROR: {err}") from err
-
-
-def mediafile(url):
-    """
-    Generate a direct download link for mediafile.cc URLs.
-    @param url: URL from mediafile.cc
-    @return: Direct download link
-    """
-    try:
-        res = get(url, allow_redirects=True)
-        match = search(r"href='([^']+)'", res.text)
-        if not match:
-            raise DirectDownloadLinkException("ERROR: Unable to find link data")
-        download_url = match.group(1)
-        sleep(60)
-        res = get(download_url, headers={"Referer": url}, cookies=res.cookies)
-        postvalue = search(r"showFileInformation(.*);", res.text)
-        if not postvalue:
-            raise DirectDownloadLinkException("ERROR: Unable to find post value")
-        postid = postvalue.group(1).replace("(", "").replace(")", "")
-        response = post(
-            "https://mediafile.cc/account/ajax/file_details",
-            data={"u": postid},
-            headers={"X-Requested-With": "XMLHttpRequest"},
-        )
-        html = response.json()["html"]
-        return [
-            i for i in findall(r'https://[^\s"\']+', html) if "download_token" in i
-        ][1]
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {str(e)}") from e
+    session = Session()
+    res = session.get(url)
+    html = HTML(res.text)
+    if not html.xpath("//input[@name]"):
+        raise DirectDownloadLinkException("ERROR: Unable to find link data")
+    data = {i.get("name"): i.get("value") for i in html.xpath("//input[@name]")}
+    res = session.post("https://gujjukhabar.in/", data=data)
+    html = HTML(res.text)
+    if not html.xpath("//input[@name]"):
+        raise DirectDownloadLinkException("ERROR: Unable to find link data")
+    data = {i.get("name"): i.get("value") for i in html.xpath("//input[@name]")}
+    resp = session.get(
+        "https://du2.devuploads.com/dlhash.php",
+        headers={
+            "Origin": "https://gujjukhabar.in",
+            "Referer": "https://gujjukhabar.in/",
+        },
+    )
+    if not resp.text:
+        raise DirectDownloadLinkException("ERROR: Unable to find ipp value")
+    data["ipp"] = resp.text.strip()
+    if not data.get("rand"):
+        raise DirectDownloadLinkException("ERROR: Unable to find rand value")
+    randpost = session.post(
+        "https://devuploads.com/token/token.php",
+        data={"rand": data["rand"], "msg": ""},
+        headers={
+            "Origin": "https://gujjukhabar.in",
+            "Referer": "https://gujjukhabar.in/",
+        },
+    )
+    if not randpost:
+        raise DirectDownloadLinkException("ERROR: Unable to find xd value")
+    data["xd"] = randpost.text.strip()
+    # Optional proxy via GUJJU_PROXY_URL env (never hard-code credentials).
+    proxy_env = (_os.environ.get("GUJJU_PROXY_URL") or "").strip()
+    request_kwargs = {"data": data}
+    if proxy_env:
+        request_kwargs["proxies"] = {"http": proxy_env, "https": proxy_env}
+    res = session.post(url, **request_kwargs)
+    html = HTML(res.text)
+    if not html.xpath("//input[@name='orilink']/@value"):
+        raise DirectDownloadLinkException("ERROR: Unable to find Direct Link")
+    direct_link = html.xpath("//input[@name='orilink']/@value")
+    session.close()
+    return direct_link[0]
 
 
 def lulacloud(url):
-    """
-    Generate a direct download link for www.lulacloud.com URLs.
-    @param url: URL from www.lulacloud.com
-    @return: Direct download link
-    """
     session = Session()
     try:
         res = session.post(url, headers={"Referer": url}, allow_redirects=False)
@@ -2262,8 +560,7 @@ def osdn(url):
 
 
 def yandex_disk(url: str) -> str:
-    """Yandex.Disk direct link generator
-    Based on https://github.com/wldhx/yadisk-direct"""
+    # Based on https://github.com/wldhx/yadisk-direct
     try:
         link = findall(r"\b(https?://(yadi\.sk|disk\.yandex\.(com|ru))\S+)", url)[0][0]
     except IndexError:
@@ -2278,7 +575,6 @@ def yandex_disk(url: str) -> str:
 
 
 def github(url):
-    """GitHub direct links generator"""
     try:
         findall(r"\bhttps?://.*github\.com.*releases\S+", url)[0]
     except IndexError as e:
@@ -2320,8 +616,7 @@ def hxfile(url):
 
 
 def onedrive(link):
-    """Onedrive direct link generator
-    By https://github.com/junedkh"""
+    # By https://github.com/junedkh
     with create_scraper() as session:
         try:
             link = session.get(link).url
@@ -2355,14 +650,14 @@ def onedrive(link):
     return resp["@content.downloadUrl"]
 
 
-def pixeldrain(url: str) -> str:
-    match = search(
-        r"(?:pixeldrain\.(?:com|net|dev)/(?:u|api/file)/|pixeldra\.in/(?:u|api/file)/|cdn\.pixeldrain\.eu\.cc/)([A-Za-z0-9_-]+)",
-        str(url),
-    )
-    if not match:
-        raise DirectDownloadLinkException("ERROR: Invalid PixelDrain link")
-    return f"https://cdn.pixeldrain.eu.cc/{match.group(1)}"
+def pixeldrain(url):
+    try:
+        url = url.rstrip("/")
+        code = url.split("/")[-1].split("?", 1)[0]
+        response = get(f"https://{url.split('/')[2]}/api/file/", allow_redirects=True)
+        return response.url + code
+    except Exception as e:
+        raise DirectDownloadLinkException("ERROR: Direct link not found")
 
 
 def streamtape(url):
@@ -2397,36 +692,8 @@ def racaty(url):
         raise DirectDownloadLinkException("ERROR: Direct link not found")
 
 
-def uploadhaven(url):
-    """
-    Generate a direct download link for uploadhaven.com URLs.
-    @param url: URL from uploadhaven.com
-    @return: Direct download link
-    """
-    try:
-        res = get(url, headers={"Referer": "http://steamunlocked.net/"})
-        html = HTML(res.text)
-        if not html.xpath('//form[@method="POST"]//input'):
-            raise DirectDownloadLinkException("ERROR: Unable to find link data")
-        data = {
-            i.get("name"): i.get("value")
-            for i in html.xpath('//form[@method="POST"]//input')
-        }
-        sleep(15)
-        res = post(url, data=data, headers={"Referer": url}, cookies=res.cookies)
-        html = HTML(res.text)
-        if not html.xpath('//div[@class="alert alert-success mb-0"]//a'):
-            raise DirectDownloadLinkException("ERROR: Unable to find link data")
-        a = html.xpath('//div[@class="alert alert-success mb-0"]//a')[0]
-        return a.get("href")
-    except Exception as e:
-        raise DirectDownloadLinkException(f"ERROR: {str(e)}") from e
-
-
 def fichier(link):
-    """1Fichier direct link generator
-    Based on https://github.com/Maujar
-    """
+    # Based on https://github.com/Maujar
     regex = r"^([http:\/\/|https:\/\/]+)?.*1fichier\.com\/\?.+"
     gan = match(regex, link)
     if not gan:
@@ -2498,9 +765,7 @@ def fichier(link):
 
 
 def solidfiles(url):
-    """Solidfiles direct link generator
-    Based on https://github.com/Xonshiz/SolidFiles-Downloader
-    By https://github.com/Jusidama18"""
+    # Based on https://github.com/Xonshiz/SolidFiles-Downloader; by https://github.com/Jusidama18
     with create_scraper() as session:
         try:
             headers = {
@@ -2778,20 +1043,16 @@ def linkBox(url: str):
             filename += f".{sub_type}"
         if not details["title"]:
             details["title"] = filename
-
-        size = 0
+        item = {
+            "path": "",
+            "filename": filename,
+            "url": itemInfo["url"],
+        }
         if "size" in itemInfo:
             size = itemInfo["size"]
             if isinstance(size, str) and size.isdigit():
                 size = float(size)
             details["total_size"] += size
-
-        item = {
-            "path": "",
-            "filename": filename,
-            "url": itemInfo["url"],
-            "size": size,
-        }
         details["contents"].append(item)
 
     def __fetch_links(session, _id=0, folderPath=""):
@@ -2839,20 +1100,16 @@ def linkBox(url: str):
                     sub_type := content.get("sub_type")
                 ) and not filename.strip().endswith(sub_type):
                     filename += f".{sub_type}"
-
-                size = 0
+                item = {
+                    "path": ospath.join(folderPath),
+                    "filename": filename,
+                    "url": content["url"],
+                }
                 if "size" in content:
                     size = content["size"]
                     if isinstance(size, str) and size.isdigit():
                         size = float(size)
                     details["total_size"] += size
-
-                item = {
-                    "path": ospath.join(folderPath),
-                    "filename": filename,
-                    "url": content["url"],
-                    "size": size,
-                }
                 details["contents"].append(item)
 
     try:
@@ -2864,7 +1121,6 @@ def linkBox(url: str):
 
 
 def gofile(url):
-    """GoFile direct link generator with dynamic websiteToken fetching."""
     try:
         if "::" in url:
             _password = url.split("::")[-1]
@@ -2876,105 +1132,38 @@ def gofile(url):
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
 
-    def __generate_website_token(account_token=""):
-        bucket = int(time.time() // 14400)
-        preimage = f"{user_agent}::en-US::{account_token}::{bucket}::9844d94d963d30"
-        return sha256(preimage.encode("utf-8")).hexdigest()
+    def __build_headers(active_token):
+        time_slot = int(time()) // 14400
+        raw = f"{user_agent}::en-US::{active_token}::{time_slot}::g4f8fd9f12h14g"
+        return {
+            "User-Agent": user_agent,
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept": "*/*",
+            "Connection": "keep-alive",
+            "Authorization": f"Bearer {active_token}",
+            "X-Website-Token": sha256(raw.encode()).hexdigest(),
+            "X-BL": "en-US",
+        }
 
-    def __get_website_token(session):
-        """Dynamically fetch the websiteToken from GoFile's website."""
-        global GOFILE_WEBSITE_TOKEN_CACHE
-        if GOFILE_WEBSITE_TOKEN_CACHE:
-            return GOFILE_WEBSITE_TOKEN_CACHE
-        try:
-            main_url = "https://gofile.io/"
-            headers = {
-                "User-Agent": user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.5",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Referer": "https://gofile.io/",
-            }
-            response = session.get(main_url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                patterns = [
-                    r'appdata\.wt\s*=\s*["\']([^"\']+)["\']',
-                    r'wt:\s*["\']([^"\']+)["\']',
-                    r'"wt"\s*:\s*["\']([^"\']+)["\']',
-                    r'websiteToken["\s:=]+["\']([^"\']+)["\']',
-                ]
-                for pattern in patterns:
-                    wt_match = search(pattern, response.text)
-                    if wt_match:
-                        GOFILE_WEBSITE_TOKEN_CACHE = wt_match.group(1)
-                        return GOFILE_WEBSITE_TOKEN_CACHE
-
-            js_urls = [
-                "https://gofile.io/dist/js/config.js",
-                "https://gofile.io/dist/js/global.js",
-                "https://gofile.io/dist/js/alljs.js",
-            ]
-            for js_url in js_urls:
-                try:
-                    js_response = session.get(js_url, headers=headers, timeout=10)
-                    if js_response.status_code == 200:
-                        for pattern in patterns:
-                            wt_match = search(pattern, js_response.text)
-                            if wt_match:
-                                GOFILE_WEBSITE_TOKEN_CACHE = wt_match.group(1)
-                                return GOFILE_WEBSITE_TOKEN_CACHE
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        GOFILE_WEBSITE_TOKEN_CACHE = "9844d94d963d30"
-        return GOFILE_WEBSITE_TOKEN_CACHE
-
-    def __get_token(session, force_new=False):
-        """Get a valid GoFile token from cache/config/fallback or create a guest token."""
+    def __get_token(session):
         global gofile_token_cache
-        guest_wt = __generate_website_token("")
         headers = {
             "User-Agent": user_agent,
             "Accept-Encoding": "gzip, deflate, br",
             "Accept": "*/*",
             "Connection": "keep-alive",
-            "Origin": "https://gofile.io",
-            "Referer": "https://gofile.io/",
-            "X-Website-Token": guest_wt,
-            "X-BL": "en-US",
         }
-        accounts_website = "https://api.gofile.io/accounts/website"
 
-        def _validate(token_value):
-            test_headers = dict(headers)
-            test_headers["Authorization"] = f"Bearer {token_value}"
-            test_res = session.get(
-                accounts_website, headers=test_headers, timeout=10
-            ).json()
-            return test_res.get("status") == "ok"
-
-        if not force_new and gofile_token_cache:
+        if gofile_token_cache:
             try:
-                if _validate(gofile_token_cache):
+                test_headers = {**headers, "Authorization": f"Bearer {gofile_token_cache}"}
+                test_res = session.get(
+                    "https://api.gofile.io/accounts/website", headers=test_headers
+                ).json()
+                if test_res.get("status") == "ok":
                     return gofile_token_cache
             except Exception:
                 pass
-            gofile_token_cache = None
-
-        if not force_new:
-            for candidate in [
-                (Config.GOFILE_TOKEN or "").strip(),
-                GOFILE_API_TOKEN_FALLBACK,
-            ]:
-                if not candidate:
-                    continue
-                try:
-                    if _validate(candidate):
-                        gofile_token_cache = candidate
-                        return gofile_token_cache
-                except Exception:
-                    continue
 
         __url = "https://api.gofile.io/accounts"
         try:
@@ -2986,312 +1175,92 @@ def gofile(url):
         except Exception as e:
             raise e
 
-    def __resolve_api_token(session):
-        return __get_token(session)
-
-    def __resolve_x_website_token(api_token, bucket_shift=0):
-        if not api_token:
-            return wt
-        try:
-            bucket = int((time.time() / 14400) // 1) + int(bucket_shift)
-            preimage = f"{user_agent}::en-US::{api_token}::{bucket}::9844d94d963d30"
-            return sha256(preimage.encode("utf-8")).hexdigest()
-        except Exception:
-            if api_token == GOFILE_API_TOKEN_FALLBACK and GOFILE_API_XWT_FALLBACK:
-                return GOFILE_API_XWT_FALLBACK
-            return wt
-
-    def __append_items_from_data(data, folderPath=""):
-        if not isinstance(data, dict):
-            return 0
-
-        data_type = data.get("type")
-        data_name = data.get("name") or data.get("code") or _id
-        if not details["title"]:
-            details["title"] = data_name
-
-        added = 0
-
-        if data_type == "file" and (data.get("link") or data.get("directLink")):
-            download_url = data.get("link") or data.get("directLink")
-            current_path = folderPath or ""
-            details["contents"].append(
-                {
-                    "path": ospath.join(current_path),
-                    "filename": data.get("name") or _id,
-                    "url": download_url,
-                }
-            )
-            if "size" in data:
-                size = data["size"]
-                if isinstance(size, str) and size.isdigit():
-                    size = float(size)
-                details["total_size"] += size
-            return 1
-
-        raw_children = data.get("children", {})
-        if isinstance(raw_children, dict):
-            children = list(raw_children.values())
-        elif isinstance(raw_children, list):
-            children = raw_children
-        else:
-            children = []
-
-        for alt_key in ("contents", "items", "files"):
-            alt_val = data.get(alt_key)
-            if isinstance(alt_val, list):
-                children.extend(alt_val)
-
-        for content in children:
-            if not isinstance(content, dict):
-                continue
-
-            content_type = content.get("type", "")
-            content_name = content.get("name") or content.get("code") or _id
-
-            is_folder = content_type == "folder" or bool(content.get("children"))
-            if is_folder:
-                if not content.get("public", True):
-                    continue
-                sub_id = content.get("id") or content.get("code")
-                if not sub_id:
-                    continue
-                if not folderPath:
-                    newFolderPath = ospath.join(content_name)
-                else:
-                    newFolderPath = ospath.join(folderPath, content_name)
-                __fetch_links(session, sub_id, newFolderPath, retry=False)
-                continue
-
-            current_path = folderPath or ""
-            download_url = content.get("link", "") or content.get("directLink", "")
-
-            if not download_url and "directLinks" in content:
-                direct_links = content.get("directLinks", {})
-                if isinstance(direct_links, dict) and direct_links:
-                    first_key = next(iter(direct_links), None)
-                    if first_key:
-                        dl_info = direct_links[first_key]
-                        if isinstance(dl_info, dict):
-                            download_url = dl_info.get("directLink", "")
-                        elif isinstance(dl_info, str):
-                            download_url = dl_info
-
-            if not download_url:
-                continue
-
-            item = {
-                "path": ospath.join(current_path),
-                "filename": content_name,
-                "url": download_url,
-            }
-            if "size" in content:
-                size = content["size"]
-                if isinstance(size, str) and size.isdigit():
-                    size = float(size)
-                details["total_size"] += size
-            details["contents"].append(item)
-            added += 1
-
-        return added
-
-    def __fetch_links_from_html(session, content_id):
-        page_url = f"https://gofile.io/d/{content_id}"
-        headers = {
-            "User-Agent": user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Referer": "https://gofile.io/",
-        }
-        try:
-            html = session.get(page_url, headers=headers, timeout=12).text
-        except Exception:
-            return False
-
-        raw = html.replace("\\/", "/")
-        links = []
-        for link in findall(
-            r"https://[A-Za-z0-9.-]*gofile\.io/download/[^\"'\s<]+", raw
-        ):
-            if link not in links:
-                links.append(link)
-
-        if not links:
-            return False
-
-        if not details["title"]:
-            details["title"] = content_id
-
-        for idx, dlink in enumerate(links, start=1):
-            filename = urlparse(dlink).path.split("/")[-1] or f"file_{idx}"
-            details["contents"].append(
-                {
-                    "path": "",
-                    "filename": filename,
-                    "url": dlink,
-                }
-            )
-        return True
-
-    def __fetch_links(session, _id, folderPath="", retry=True, rate_retry=2):
-        nonlocal token, xwt
-        _url = f"https://api.gofile.io/contents/{_id}"
-        headers = {
-            "User-Agent": user_agent,
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Connection": "keep-alive",
-            "Authorization": f"Bearer {token}",
-            "X-Website-Token": xwt,
-            "X-BL": "en-US",
-            "Origin": "https://gofile.io",
-            "Referer": "https://gofile.io/",
-        }
-        params = {"cache": "true"}
+    def __fetch_links(session, _id, folderPath=""):
+        nonlocal token
+        _url = f"https://api.gofile.io/contents/{_id}?cache=true"
+        headers = __build_headers(token)
         if _password:
-            params["password"] = _password
+            _url += f"&password={_password}"
         try:
-            _json = session.get(_url, headers=headers, params=params).json()
+            _json = session.get(_url, headers=headers).json()
         except Exception as e:
             raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
 
-        status = _json.get("status", "")
-
-        if status == "error-rateLimit":
-            if rate_retry > 0:
-                sleep(2)
-                __fetch_links(
-                    session,
-                    _id,
-                    folderPath,
-                    retry=retry,
-                    rate_retry=rate_retry - 1,
-                )
-                return
-            if not folderPath and __fetch_links_from_html(session, _id):
-                return
-            raise DirectDownloadLinkException(
-                "ERROR: GoFile API rate limited. Please retry after a short while."
-            )
-
-        if status in ("error-unauth", "error-forbidden", "error-tokenInvalid"):
+        if _json.get("status") in {
+            "error-unauth",
+            "error-forbidden",
+            "error-tokenInvalid",
+        }:
             global gofile_token_cache
             gofile_token_cache = None
-            if retry:
-                try:
-                    token = __get_token(session, force_new=True)
-                    xwt = __resolve_x_website_token(token)
-                    details["header"] = [
-                        f"Cookie: accountToken={token}",
-                        f"X-Website-Token: {xwt}",
-                        f"User-Agent: {user_agent}",
-                        "Accept: */*",
-                        "Connection: keep-alive",
-                        "Referer: https://gofile.io/",
-                    ]
-                    __fetch_links(
-                        session,
-                        _id,
-                        folderPath,
-                        retry=False,
-                        rate_retry=rate_retry,
-                    )
-                    return
-                except Exception:
-                    raise DirectDownloadLinkException(
-                        "ERROR: GoFile token revoked and failed to create new token."
-                    )
-            raise DirectDownloadLinkException("ERROR: GoFile token revoked.")
-
-        if status == "error-token" and retry:
-            alt_xwt = __resolve_x_website_token(token, bucket_shift=-1)
-            if alt_xwt != xwt:
-                xwt = alt_xwt
-                details["header"] = [
-                    f"Cookie: accountToken={token}",
-                    f"X-Website-Token: {xwt}",
-                    f"User-Agent: {user_agent}",
-                    "Accept: */*",
-                    "Connection: keep-alive",
-                    "Referer: https://gofile.io/",
-                ]
-                __fetch_links(
-                    session,
-                    _id,
-                    folderPath,
-                    retry=False,
-                    rate_retry=rate_retry,
+            try:
+                token = __get_token(session)
+                details["header"] = f"Cookie: accountToken={token}"
+                _json = session.get(_url, headers=__build_headers(token)).json()
+            except DirectDownloadLinkException:
+                raise
+            except Exception:
+                raise DirectDownloadLinkException(
+                    "ERROR: GoFile token revoked and failed to create new token."
                 )
-                return
 
-        if status == "error-passwordRequired":
+            if _json.get("status") in {
+                "error-unauth",
+                "error-forbidden",
+                "error-tokenInvalid",
+            }:
+                raise DirectDownloadLinkException("ERROR: GoFile token revoked.")
+
+        if _json.get("status") == "error-passwordRequired":
             raise DirectDownloadLinkException(
                 f"ERROR:\n{PASSWORD_ERROR_MESSAGE.format(url)}"
             )
-        if status == "error-passwordWrong":
+        if _json.get("status") == "error-passwordWrong":
             raise DirectDownloadLinkException("ERROR: This password is wrong !")
-        if status == "error-notFound":
+        if _json.get("status") == "error-notFound":
             raise DirectDownloadLinkException(
                 "ERROR: File not found on gofile's server"
             )
-        if status == "error-notPublic":
+        if _json.get("status") == "error-notPublic":
             raise DirectDownloadLinkException("ERROR: This folder is not public")
-        if status in ("error-notPremium", "error-token"):
-            try:
-                anon_headers = {
-                    "User-Agent": user_agent,
-                    "Accept-Encoding": "gzip, deflate, br",
-                    "Accept": "*/*",
-                    "Accept-Language": "en-US,en;q=0.5",
-                    "Connection": "keep-alive",
-                    "X-Website-Token": xwt,
-                    "X-BL": "en-US",
-                    "Origin": "https://gofile.io",
-                    "Referer": "https://gofile.io/",
+
+        data = _json["data"]
+
+        if not details["title"]:
+            details["title"] = data["name"] if data["type"] == "folder" else _id
+
+        contents = data["children"]
+        for content in contents.values():
+            if content["type"] == "folder":
+                if not content["public"]:
+                    continue
+                if not folderPath:
+                    newFolderPath = ospath.join(details["title"], content["name"])
+                else:
+                    newFolderPath = ospath.join(folderPath, content["name"])
+                __fetch_links(session, content["id"], newFolderPath)
+            else:
+                if not folderPath:
+                    folderPath = details["title"]
+                item = {
+                    "path": ospath.join(folderPath),
+                    "filename": content["name"],
+                    "url": content["link"],
                 }
-                anon_params = dict(params)
-                anon_params["wt"] = wt
-                anon_json = session.get(
-                    _url, headers=anon_headers, params=anon_params
-                ).json()
-                if anon_json.get("status") == "ok":
-                    __append_items_from_data(anon_json["data"], folderPath)
-                    return
-            except Exception:
-                pass
-
-            if not folderPath and __fetch_links_from_html(session, _id):
-                return
-
-            raise DirectDownloadLinkException(
-                "ERROR: GoFile API access blocked and public fallback failed for this link."
-            )
-
-        data = _json.get("data", {})
-        added = __append_items_from_data(data, folderPath)
-        if not added and not folderPath:
-            if __fetch_links_from_html(session, _id):
-                return
-            raise DirectDownloadLinkException(
-                "ERROR: Unable to extract downloadable files from GoFile response."
-            )
+                if "size" in content:
+                    size = content["size"]
+                    if isinstance(size, str) and size.isdigit():
+                        size = float(size)
+                    details["total_size"] += size
+                details["contents"].append(item)
 
     details = {"contents": [], "title": "", "total_size": 0}
     with Session() as session:
         try:
-            wt = __get_website_token(session)
-            token = __resolve_api_token(session)
-            xwt = __resolve_x_website_token(token)
+            token = __get_token(session)
         except Exception as e:
             raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
-        details["header"] = [
-            f"Cookie: accountToken={token}",
-            f"X-Website-Token: {xwt}",
-            f"User-Agent: {user_agent}",
-            "Accept: */*",
-            "Connection: keep-alive",
-            "Referer: https://gofile.io/",
-        ]
+        details["header"] = f"Cookie: accountToken={token}"
         try:
             __fetch_links(session, _id)
         except Exception as e:
@@ -3365,39 +1334,39 @@ def mediafireFolder(url):
     details["title"] = folder_infos[0]["name"]
 
     def __scraper(url):
-        session = create_scraper()
-        parsed_url = urlparse(url)
-        url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+        with create_scraper() as session:
+            parsed_url = urlparse(url)
+            url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
 
-        def __repair_download(url):
+            def __repair_download(url):
+                try:
+                    html = HTML(session.get(url).text)
+                    if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
+                        return __scraper(f"https://mediafire.com/{new_link[0]}")
+                except Exception:
+                    return
+
             try:
                 html = HTML(session.get(url).text)
-                if new_link := html.xpath('//a[@id="continue-btn"]/@href'):
-                    return __scraper(f"https://mediafire.com/{new_link[0]}")
-            except Exception:
-                return
-
-        try:
-            html = HTML(session.get(url).text)
-        except Exception:
-            return
-        if html.xpath("//div[@class='passwordPrompt']"):
-            if not _password:
-                raise DirectDownloadLinkException(
-                    f"ERROR: {PASSWORD_ERROR_MESSAGE}".format(url)
-                )
-            try:
-                html = HTML(session.post(url, data={"downloadp": _password}).text)
             except Exception:
                 return
             if html.xpath("//div[@class='passwordPrompt']"):
-                return
-        if final_link := html.xpath('//a[@aria-label="Download file"]/@href'):
-            if final_link[0].startswith("//"):
-                return __scraper(f"https://{final_link[0][2:]}")
-            return final_link[0]
-        if repair_link := html.xpath("//a[@class='retry']/@href"):
-            return __repair_download(repair_link[0])
+                if not _password:
+                    raise DirectDownloadLinkException(
+                        f"ERROR: {PASSWORD_ERROR_MESSAGE}".format(url)
+                    )
+                try:
+                    html = HTML(session.post(url, data={"downloadp": _password}).text)
+                except Exception:
+                    return
+                if html.xpath("//div[@class='passwordPrompt']"):
+                    return
+            if final_link := html.xpath('//a[@aria-label="Download file"]/@href'):
+                if final_link[0].startswith("//"):
+                    return __scraper(f"https://{final_link[0][2:]}")
+                return final_link[0]
+            if repair_link := html.xpath("//a[@class='retry']/@href"):
+                return __repair_download(repair_link[0])
 
     def __get_content(folderKey, folderPath="", content_type="folders"):
         try:
@@ -3438,14 +1407,11 @@ def mediafireFolder(url):
                     folderPath = details["title"]
                 item["path"] = ospath.join(folderPath)
                 item["url"] = _url
-
-                size = 0
                 if "size" in file:
                     size = file["size"]
                     if isinstance(size, str) and size.isdigit():
                         size = float(size)
                     details["total_size"] += size
-                item["size"] = size
                 details["contents"].append(item)
 
     try:
@@ -3582,12 +1548,7 @@ def send_cm(url):
         for file in files:
             if not (link := __getFile_link(file["file_id"])):
                 continue
-            item = {
-                "url": link,
-                "filename": file["filename"],
-                "path": folderPath,
-                "size": file["size"],
-            }
+            item = {"url": link, "filename": file["filename"], "path": folderPath}
             details["total_size"] += file["size"]
             details["contents"].append(item)
 
@@ -3712,6 +1673,12 @@ def filelions_and_streamwish(url):
     parsed_url = urlparse(url)
     hostname = parsed_url.hostname
     scheme = parsed_url.scheme
+    if not hostname:
+        raise DirectDownloadLinkException(
+            "ERROR: URL is missing a hostname; cannot pick filelions/streamwish API."
+        )
+    apiKey = ""
+    apiUrl = ""
     if any(
         x in hostname
         for x in [
@@ -3886,8 +1853,7 @@ def tmpsend(url):
 
 
 def qiwi(url):
-    """qiwi.gg link generator
-    based on https://github.com/aenulrofik"""
+    # Based on https://github.com/aenulrofik
     with Session() as session:
         file_id = url.split("/")[-1]
         try:
@@ -3937,8 +1903,7 @@ def mp4upload(url):
 
 
 def berkasdrive(url):
-    """berkasdrive.com link generator
-    by https://github.com/aenulrofik"""
+    # By https://github.com/aenulrofik
     with Session() as session:
         try:
             sesi = session.get(url).text
@@ -4038,9 +2003,7 @@ def swisstransfer(link):
             continue
 
         download_url = f"https://{download_host}/api/download/{transfer_id}/{file_uuid}?token={token}"
-        contents.append(
-            {"filename": file_name, "path": "", "url": download_url, "size": file_size}
-        )
+        contents.append({"filename": file_name, "path": "", "url": download_url})
 
     return {
         "contents": contents,
@@ -4050,38 +2013,7 @@ def swisstransfer(link):
     }
 
 
-def videq(url: str):
-    """Scrape videq links using videq_scraper module; supports single files and folders."""
-    from .videq_scraper import (
-        videq as videq_scrape,
-        videq_folder as videq_folder_scrape,
-    )
-
-    if "/f/" in url:
-        return videq_folder_scrape(url)
-    return videq_scrape(url)
-
-
-def videq_folder(url: str):
-    """Scrape videq folder links using videq_scraper module."""
-    from .videq_scraper import videq_folder as videq_folder_scrape
-
-    return videq_folder_scrape(url)
-
-
 def instagram(link: str) -> str:
-    """
-    Fetches the direct video download URL from an Instagram post.
-
-    Args:
-        link (str): The Instagram post URL.
-
-    Returns:
-        str: The direct video URL.
-
-    Raises:
-        DirectDownloadLinkException: If any error occurs during the process.
-    """
     api_url = Config.INSTADL_API or "https://instagramcdn.vercel.app"
     full_url = f"{api_url}/api/video?postUrl={link}"
 

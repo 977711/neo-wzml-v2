@@ -26,9 +26,6 @@ from bot import (
     drives_names,
     index_urls,
     intervals,
-    jd_listener_lock,
-    QBIT_DEFAULT_WEB_PASSWORD,
-    qbit_options,
     task_dict,
     shortener_dict,
     excluded_extensions,
@@ -40,9 +37,8 @@ from bot.helper.themes import BotTheme
 from bot.core.tg_client import TgClient
 from bot.helper.ext_utils.bot_utils import new_task, SetInterval
 from bot.core.torrent_manager import TorrentManager
-from bot.core.startup import update_qb_options, update_variables
+from bot.core.startup import update_variables
 from bot.helper.ext_utils.db_handler import database
-from bot.core.jdownloader_booter import jdownloader
 from bot.helper.ext_utils.task_manager import start_from_queued
 from bot.helper.mirror_leech_utils.rclone_utils.serve import rclone_serve_booter
 from bot.helper.telegram_helper.button_build import ButtonMaker
@@ -66,7 +62,7 @@ bool_vars = [
     'SCREENSHOTS_MODE', 'STRICT_MODE',
     'DISABLE_TORRENTS', 'DISABLE_LEECH',
     'DISABLE_BULK', 'DISABLE_MULTI', 'DISABLE_SEED',
-    'DISABLE_FF_MODE', 'JD_MODE',
+    'DISABLE_FF_MODE', 
     'MEGA_ENABLED', 'TERABOX_ENABLED', 'MEDIA_STORE', 'SHOW_CLOUD_LINK',
     'UPDATE_PKGS', 'AUTO_UPDATE',
 ]
@@ -94,15 +90,6 @@ DEFAULT_VALUES = {
 async def _restart_web_server():
     """Apply the current `Config.BASE_URL` / `Config.BASE_URL_PORT` to the
     gunicorn web server *immediately*.
-
-    - Always kill any running gunicorn first (so port changes take effect
-      cleanly and a now-empty BASE_URL really shuts the surface down).
-    - Then re-spawn gunicorn ONLY if `Config.BASE_URL` is set, on the
-      configured port.
-
-    Call this from any code path that mutates BASE_URL / BASE_URL_PORT so
-    the change is live the moment the operator saves it — no full bot
-    restart required.
     """
     try:
         await (
@@ -135,9 +122,7 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False, message=None):
     if key is None:
         buttons.data_button("Aria2c Settings", "botset aria")
         buttons.data_button("Config Variables", "botset var")
-        buttons.data_button("JDownloader Sync", "botset syncjd")
         buttons.data_button("Private Files", "botset private open")
-        buttons.data_button("Qbit Settings", "botset qbit")
         buttons.data_button("Universal Tasks", "botset universal")
         buttons.data_button("Close", "botset close")
         msg = '<blockquote><b><i>Bot Settings:</i></b></blockquote>'
@@ -188,11 +173,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False, message=None):
                 if key == "newkey"
                 else f"Send a valid value for {key}. Current value is '{aria2_options[key]}'. Timeout: 60 sec"
             )
-        elif edit_type == "qbitvar":
-            buttons.data_button("Back", "botset qbit")
-            buttons.data_button("Empty String", f"botset emptyqbit {key}")
-            buttons.data_button("Close", "botset close")
-            msg = f"Send a valid value for {key}. Current value is '{qbit_options[key]}'. Timeout: 60 sec"
     elif key == "var":
         conf_dict = Config.get_all()
         conf_dict.pop("USER_TRANSMISSION", None)
@@ -280,21 +260,6 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False, message=None):
                 f"{int(x / 10)}", f"botset start aria {x}", position="footer"
             )
         msg = f"Aria2c Options | Page: {int(offset / 10)} | State: {state}"
-    elif key == "qbit":
-        for k in sorted(list(qbit_options.keys()))[offset : 10 + offset]:
-            buttons.data_button(k, f"botset qbitvar {k}")
-        if state == "view":
-            buttons.data_button("Edit", "botset edit qbit")
-        else:
-            buttons.data_button("View", "botset view qbit")
-        buttons.data_button("Sync Qbittorrent", "botset syncqbit")
-        buttons.data_button("Back", "botset back")
-        buttons.data_button("Close", "botset close")
-        for x in range(0, len(qbit_options), 10):
-            buttons.data_button(
-                f"{int(x / 10)}", f"botset start qbit {x}", position="footer"
-            )
-        msg = f"Qbittorrent Options | Page: {int(offset / 10)} | State: {state}"
 
     return msg, buttons.build_menu(1 if key is None else 2)
 
@@ -360,7 +325,7 @@ async def edit_variable(_, message, pre_message, key):
     elif key == "EXCLUDED_EXTENSIONS":
         fx = value.split()
         excluded_extensions.clear()
-        excluded_extensions.extend(["aria2", "!qB"])
+        excluded_extensions.extend(["aria2"])
         for x in fx:
             x = x.lstrip(".")
             excluded_extensions.append(x.strip().lower())
@@ -462,8 +427,6 @@ async def edit_variable(_, message, pre_message, key):
         "RCLONE_SERVE_PASS",
     ]:
         await rclone_serve_booter()
-    elif key in ["JD_EMAIL", "JD_PASS"]:
-        await jdownloader.boot()
     elif key in ["BASE_URL", "BASE_URL_PORT"]:
         await _restart_web_server()
     elif key == "RSS_DELAY":
@@ -487,31 +450,6 @@ async def edit_aria(_, message, pre_message, key):
 
 
 @new_task
-async def edit_qbit(_, message, pre_message, key):
-    handler_dict[message.chat.id] = False
-    value = message.text
-    if key == "web_ui_password":
-        value = QBIT_DEFAULT_WEB_PASSWORD
-        await send_message(
-            message,
-            "qBittorrent WebUI password is managed by startup and set to adminadmin.",
-        )
-    elif value.lower() == "true":
-        value = True
-    elif value.lower() == "false":
-        value = False
-    elif key == "max_ratio":
-        value = float(value)
-    elif value.isdigit():
-        value = int(value)
-    await TorrentManager.qbittorrent.app.set_preferences({key: value})
-    qbit_options[key] = value
-    await update_buttons(pre_message, "qbit")
-    await delete_message(message)
-    await database.update_qbittorrent(key, value)
-
-
-@new_task
 async def edit_universal(_, message, pre_message):
     handler_dict[message.chat.id] = False
     value = message.text.strip()
@@ -527,19 +465,6 @@ async def edit_universal(_, message, pre_message):
     await update_buttons(pre_message, "universal")
     await delete_message(message)
     await database.update_universal_max_tasks(value)
-
-
-async def sync_jdownloader():
-    async with jd_listener_lock:
-        if not Config.DATABASE_URL or not jdownloader.is_connected:
-            return
-        await jdownloader.device.system.exit_jd()
-    if await aiopath.exists("cfg.zip"):
-        await remove("cfg.zip")
-    await (
-        await create_subprocess_exec("7z", "a", "cfg.zip", "/JDownloader/cfg")
-    ).wait()
-    await database.update_private_file("cfg.zip")
 
 
 @new_task
@@ -691,19 +616,7 @@ async def edit_bot_settings(client, query):
         await query.answer()
         start_dict[chat_id] = 0
         await update_buttons(message, None)
-    elif data[1] == "syncjd":
-        if not Config.JD_EMAIL or not Config.JD_PASS:
-            await query.answer(
-                "No Email or Password provided!",
-                show_alert=True,
-            )
-            return
-        await query.answer(
-            "Syncronization Started. JDownloader will get restarted. It takes up to 10 sec!",
-            show_alert=True,
-        )
-        await sync_jdownloader()
-    elif data[1] in ["var", "aria", "qbit"]:
+    elif data[1] in ["var", "aria"]:
         await query.answer()
         await update_buttons(message, data[1])
     elif data[1] == "resetvar":
@@ -726,7 +639,7 @@ async def edit_bot_settings(client, query):
             value = 0
         elif data[2] == "EXCLUDED_EXTENSIONS":
             excluded_extensions.clear()
-            excluded_extensions.extend(["aria2", "!qB"])
+            excluded_extensions.extend(["aria2"])
         elif data[2] == "TORRENT_TIMEOUT":
             await TorrentManager.change_aria2_option("bt-stop-timeout", "0")
             await database.update_aria2("bt-stop-timeout", "0")
@@ -744,8 +657,6 @@ async def edit_bot_settings(client, query):
                 index_urls[0] = ""
         elif data[2] == "INCOMPLETE_TASK_NOTIFIER":
             await database.trunc_table("tasks")
-        elif data[2] in ["JD_EMAIL", "JD_PASS"]:
-            await create_subprocess_exec("pkill", "-9", "-f", "java")
         elif data[2] == "AUTHORIZED_CHATS":
             auth_chats.clear()
         elif data[2] == "SUDO_USERS":
@@ -768,14 +679,6 @@ async def edit_bot_settings(client, query):
             await rclone_serve_booter()
         elif data[2] in ["BASE_URL", "BASE_URL_PORT"]:
             await _restart_web_server()
-    elif data[1] == "syncqbit":
-        handler_dict[chat_id] = False
-        await query.answer(
-            "Syncronization Started. It takes up to 2 sec!", show_alert=True
-        )
-        qbit_options.clear()
-        await update_qb_options()
-        await database.save_qbit_settings()
     elif data[1] == "emptyaria":
         handler_dict[chat_id] = False
         await query.answer()
@@ -783,18 +686,6 @@ async def edit_bot_settings(client, query):
         await update_buttons(message, "aria")
         await TorrentManager.change_aria2_option(data[2], "")
         await database.update_aria2(data[2], "")
-    elif data[1] == "emptyqbit":
-        handler_dict[chat_id] = False
-        await query.answer()
-        if data[2] == "web_ui_password":
-            return await query.answer(
-                "qBittorrent WebUI password is managed by startup and cannot be emptied.",
-                show_alert=True,
-            )
-        await TorrentManager.qbittorrent.app.set_preferences({data[2]: ""})
-        qbit_options[data[2]] = ""
-        await update_buttons(message, "qbit")
-        await database.update_qbittorrent(data[2], "")
     elif data[1] == "private":
         await query.answer()
         if data[2] in ("open", "stop"):
@@ -866,23 +757,6 @@ async def edit_bot_settings(client, query):
         await event_handler(client, query, pfunc, rfunc)
     elif data[1] == "ariavar" and state == "view":
         value = f"{aria2_options[data[2]]}"
-        if len(value) > 200:
-            await query.answer()
-            with BytesIO(str.encode(value)) as out_file:
-                out_file.name = f"{data[2]}.txt"
-                await send_file(message, out_file)
-            return
-        elif value == "":
-            value = None
-        await query.answer(f"{value}", show_alert=True)
-    elif data[1] == "qbitvar" and state == "edit":
-        await query.answer()
-        await update_buttons(message, data[2], data[1])
-        pfunc = partial(edit_qbit, pre_message=message, key=data[2])
-        rfunc = partial(update_buttons, message, "qbit")
-        await event_handler(client, query, pfunc, rfunc)
-    elif data[1] == "qbitvar" and state == "view":
-        value = f"{qbit_options[data[2]]}"
         if len(value) > 200:
             await query.answer()
             with BytesIO(str.encode(value)) as out_file:

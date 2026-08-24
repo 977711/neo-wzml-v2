@@ -49,7 +49,6 @@ class EngineStatus:
         self.STATUS_ARIA2 = f"Aria2 v{ver.get('aria2', 'N/A')}"
         self.STATUS_AIOHTTP = f"AioHttp v{ver.get('aiohttp', 'N/A')}"
         self.STATUS_GDAPI = f"Google-API v{ver.get('gapi', 'N/A')}"
-        self.STATUS_QBIT = f"qBit v{ver.get('qBittorrent', 'N/A')}"
         self.STATUS_TGRAM = f"Pyro v{pyrover}"
         self.STATUS_MEGA = f"MegaSDK v{ver.get('mega', '8.1.1')}"
         self.STATUS_TERABOX = f"teraboxSDK v{ver.get('terabox', '1.0.0')}"
@@ -58,7 +57,6 @@ class EngineStatus:
         self.STATUS_7Z = f"7z v{ver.get('7z', 'N/A')}"
         self.STATUS_RCLONE = f"RClone v{ver.get('rclone', 'N/A')}"
         self.STATUS_QUEUE = "QSystem v2"
-        self.STATUS_JD = "JDownloader v2"
         self.STATUS_YT = "Youtube-Api"
         self.STATUS_METADATA = "Metadata"
         self.STATUS_UPHOSTER = "Uphoster"
@@ -283,12 +281,6 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
             msg += BotTheme("ELAPSED", Elapsed=get_readable_time(elapsed))
             msg += BotTheme("ENGINE", Engine=task.engine)
             msg += BotTheme("STA_MODE", Mode=f"{task.listener.mode[0]} - {task.listener.mode[1]}")
-            if task.engine.startswith("qBit") and hasattr(task, "seeders_num"):
-                try:
-                    msg += BotTheme("SEEDERS", Seeders=task.seeders_num())
-                    msg += BotTheme("LEECHERS", Leechers=task.leechers_num())
-                except Exception:
-                    pass
         elif tstatus == MirrorStatus.STATUS_SEED:
             msg += BotTheme("STATUS", Status=tstatus, Url=msg_link)
             msg += BotTheme("SEED_SIZE", Size=task.size())
@@ -304,10 +296,6 @@ async def get_readable_message(sid, is_user, page_no=1, status="All", page_step=
 
         msg += BotTheme("USER", User=task.listener.user.mention(style="html"))
         msg += BotTheme("ID", Id=task.listener.user_id)
-        if task.engine.startswith("qBit"):
-            msg += BotTheme(
-                "BTSEL", Btsel=f"/{BotCommands.SelectCommand[1]}_{task.gid()}"
-            )
         msg += BotTheme(
             "CANCEL", Cancel=f"/{BotCommands.CancelTaskCommand[1]}_{task.gid()}"
         )

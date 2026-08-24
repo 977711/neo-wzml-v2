@@ -18,10 +18,6 @@ from .uphoster import uphoster
 from .mirror_leech import (
     mirror,
     leech,
-    qb_leech,
-    qb_mirror,
-    jd_leech,
-    jd_mirror,
 )
 from .restart import (
     restart_bot,
@@ -70,10 +66,6 @@ __all__ = [
     "uphoster",
     "mirror",
     "leech",
-    "qb_leech",
-    "qb_mirror",
-    "jd_leech",
-    "jd_mirror",
     "restart_bot",
     "restart_notification",
     "confirm_restart",

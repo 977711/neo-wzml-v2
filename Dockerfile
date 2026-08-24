@@ -1,4 +1,4 @@
-FROM irisxdr/neo-wzml:latest
+FROM pro97775/test:test-neo
 
 WORKDIR /usr/src/app
 

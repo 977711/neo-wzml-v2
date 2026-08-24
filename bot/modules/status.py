@@ -16,7 +16,6 @@ from bot import (
     DOWNLOAD_DIR,
 )
 from bot.core.torrent_manager import TorrentManager
-from bot.core.jdownloader_booter import jdownloader
 from bot.helper.ext_utils.bot_utils import new_task
 from bot.helper.ext_utils.status_utils import (
     EngineStatus,
@@ -169,16 +168,10 @@ async def status_pages(_, query):
 
         eng_status = EngineStatus()
         if any(
-            eng in (eng_status.STATUS_ARIA2, eng_status.STATUS_QBIT)
+            eng == eng_status.STATUS_ARIA2
             for _, __, eng in status_results
         ):
             dl_speed, seed_speed = await TorrentManager.overall_speed()
-
-        if any(eng == eng_status.STATUS_JD for _, __, eng in status_results):
-            if jdownloader.is_connected:
-                dl_speed += (
-                    await jdownloader.device.downloadcontroller.get_speed_in_bytes()
-                )
 
         for status, speed, _ in status_results:
             match status:

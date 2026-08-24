@@ -138,10 +138,8 @@ class TaskConfig:
         self.subsize = 0
         self.proceed_count = 0
         self.is_leech = False
-        self.is_qbit = False
         self.is_mega = False
         self.is_terabox = False
-        self.is_jd = False
         self.is_clone = False
         self.is_uphoster = False
         self.is_gdrive = False
@@ -239,7 +237,7 @@ class TaskConfig:
             is_terabox_link(self.link) if self.source_url else False
         )
 
-        in_mode = f"#{'Mega' if self.is_mega else 'Terabox' if self.is_terabox else 'qBit' if self.is_qbit else 'JDown' if self.is_jd else 'RCloneDL' if self.is_rclone else 'ytdlp' if self.is_ytdlp else 'GDrive' if (self.is_clone or self.is_gdrive) else 'Aria2' if (self.source_url and self.source_url != self.message.link) else 'TgMedia'}"
+        in_mode = f"#{'Mega' if self.is_mega else 'Terabox' if self.is_terabox else 'RCloneDL' if self.is_rclone else 'ytdlp' if self.is_ytdlp else 'GDrive' if (self.is_clone or self.is_gdrive) else 'Aria2' if (self.source_url and self.source_url != self.message.link) else 'TgMedia'}"
 
         self.mode = (in_mode, out_mode)
 
@@ -319,11 +317,10 @@ class TaskConfig:
             or (getattr(Config, "LEECH_NAME_SWAP", "") if "LEECH_NAME_SWAP" not in self.user_dict else "")
         )
 
-
         self.excluded_extensions = self.user_dict.get("EXCLUDED_EXTENSIONS") or (
             excluded_extensions
             if "EXCLUDED_EXTENSIONS" not in self.user_dict
-            else ["aria2", "!qB"]
+            else ["aria2"]
         )
         if not self.rc_flags:
             if self.user_dict.get("RCLONE_FLAGS"):
@@ -331,21 +328,20 @@ class TaskConfig:
             elif "RCLONE_FLAGS" not in self.user_dict and Config.RCLONE_FLAGS:
                 self.rc_flags = Config.RCLONE_FLAGS
         if self.link not in ["rcl", "gdl", "tbx"]:
-            if not self.is_jd:
-                if is_rclone_path(self.link):
-                    if not self.link.startswith("mrcc:") and self.user_dict.get(
-                        "USER_TOKENS", False
-                    ):
-                        self.link = f"mrcc:{self.link}"
-                    await self.is_token_exists(self.link, "dl")
-                elif is_gdrive_link(self.link):
-                    if not self.link.startswith(
-                        ("mtp:", "tp:", "sa:")
-                    ) and self.user_dict.get("USER_TOKENS", False):
-                        self.link = f"mtp:{self.link}"
-                    await self.is_token_exists(self.link, "dl")
+            if is_rclone_path(self.link):
+                if not self.link.startswith("mrcc:") and self.user_dict.get(
+                    "USER_TOKENS", False
+                ):
+                    self.link = f"mrcc:{self.link}"
+                await self.is_token_exists(self.link, "dl")
+            elif is_gdrive_link(self.link):
+                if not self.link.startswith(
+                    ("mtp:", "tp:", "sa:")
+                ) and self.user_dict.get("USER_TOKENS", False):
+                    self.link = f"mtp:{self.link}"
+                await self.is_token_exists(self.link, "dl")
         elif self.link == "rcl":
-            if not self.is_ytdlp and not self.is_jd:
+            if not self.is_ytdlp:
                 self.link = await RcloneList(self).get_rclone_path("rcd")
                 if not is_rclone_path(self.link):
                     raise ValueError(self.link)
@@ -356,12 +352,12 @@ class TaskConfig:
                 ):
                     self._rcl_web = True
         elif self.link == "gdl":
-            if not self.is_ytdlp and not self.is_jd:
+            if not self.is_ytdlp:
                 self.link = await GoogleDriveList(self).get_target_id("gdd")
                 if not is_gdrive_id(self.link):
                     raise ValueError(self.link)
         elif self.link == "tbx":
-            if not self.is_ytdlp and not self.is_jd and not self.is_clone:
+            if not self.is_ytdlp and not self.is_clone:
                 self.terabox_cookie = await self._terabox_cookie_path("Download")
                 if not self.terabox_cookie:
                     raise ValueError(
@@ -737,9 +733,7 @@ class TaskConfig:
         await obj(
             client=self.client,
             message=nextmsg,
-            is_qbit=self.is_qbit,
             is_leech=self.is_leech,
-            is_jd=self.is_jd,
             is_uphoster=self.is_uphoster,
             same_dir=self.same_dir,
             bulk=self.bulk,
@@ -780,9 +774,7 @@ class TaskConfig:
             await obj(
                 client=self.client,
                 message=nextmsg,
-                is_qbit=self.is_qbit,
                 is_leech=self.is_leech,
-                is_jd=self.is_jd,
                 is_uphoster=self.is_uphoster,
                 same_dir=self.same_dir,
                 bulk=self.bulk,
