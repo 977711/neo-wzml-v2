@@ -133,8 +133,8 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False, message=None):
     offset = start_dict.get(chat_id, 0) if chat_id else 0
     buttons = ButtonMaker()
     if key is None:
-        buttons.data_button("Aria2c Settings", "botset aria")
         buttons.data_button("Config Variables", "botset var")
+        buttons.data_button("Aria2c Settings", "botset aria")
         buttons.data_button("JDownloader Sync", "botset syncjd")
         buttons.data_button("Private Files", "botset private open")
         buttons.data_button("Qbit Settings", "botset qbit")
